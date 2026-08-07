@@ -6,8 +6,8 @@ Status: in progress.
 
 The approved active slice is minimal application-owned authentication followed by candidate CSV
 import/private export and dual-mode candidate search. The design and three executable plans are
-approved. The application-owned identity-domain refactor is implemented and verified; login and
-refresh-session application contracts are next.
+approved. The application-owned identity model and login/refresh-session creation contracts are
+implemented and verified. Spring Security/JWT HTTP adapters are next.
 
 ## What changed
 
@@ -22,6 +22,14 @@ refresh-session application contracts are next.
 - Removed the Cognito subject from `AppUser`, bootstrap command, service, and persistence port.
 - Added canonical display email, normalized lookup email, BCrypt hash storage, and rejection of
   plaintext/non-BCrypt provisioning values.
+- Added authentication application ports/service, generic authentication failure, access-token
+  claims, and refresh-session domain data.
+- Login always performs password verification (using a dummy BCrypt hash for unknown emails),
+  accepts only active users/memberships, and atomically hands the hashed refresh session plus login
+  timestamp to persistence.
+- Access and refresh defaults are supplied explicitly to the service; the verified contract uses
+  15 minutes and seven days. A token provider that returns the raw refresh token as its stored hash
+  is rejected.
 
 ## Why this approach
 
@@ -55,6 +63,7 @@ from becoming database instructions.
 - Planned backend modules: `identity`, `jobs`, `candidates`, `imports`, `files`, `search`, and shared
   authorization/error infrastructure.
 - Identity bootstrap domain/application files and `WorkspaceBootstrapServiceTests`.
+- Identity authentication application/domain files and `AuthenticationServiceTests`.
 
 ## Verification commands and observed results
 
@@ -69,11 +78,16 @@ from becoming database instructions.
 - Focused green test: the same command — 3 tests passed.
 - Full verification: `mvn ... spotless:apply verify` — build succeeded; 13 tests passed and Spotless
   reported all 22 Java files clean.
+- Authentication focused red test — failed at test compilation because all new login/session types
+  were intentionally absent.
+- Authentication focused green test — 4 tests passed.
+- Authentication full verification: `mvn ... spotless:apply verify` — build succeeded; 17 tests
+  passed and Spotless reported all 32 Java files clean.
 - Docker-backed checks are blocked because Docker is not currently discoverable from this shell.
 
 ## Blockers, prerequisites, and exact next step
 
 - External prerequisites: runnable Docker engine/CLI, PostgreSQL/Supabase connection, AWS account,
   private S3/SQS resources, malware scanner choice, and an xAI key with usable billing.
-- Exact next step: add failing authentication-service tests for valid/generic-invalid/suspended
-  login and hashed seven-day refresh-session creation, then implement the application contracts.
+- Exact next step: add Spring Security dependencies and failing MockMvc tests for public health/
+  login, protected session, generic 401, secure refresh transport, logout, and role claims.

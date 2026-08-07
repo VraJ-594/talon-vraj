@@ -80,11 +80,11 @@
 - Consumes: normalized email, raw request password, clock, token issuer, refresh-session store.
 - Produces: short-lived access token metadata and one raw refresh token returned only to transport.
 
-- [ ] Write failing tests for valid login, generic invalid email/password, suspended account, refresh-token hashing, and seven-day expiry.
-- [ ] Run the focused tests and verify missing application types are the failure reason.
-- [ ] Implement constant-path password verification using a dummy BCrypt hash for absent users and never expose account-existence differences.
-- [ ] Run focused tests, then the full Maven verification.
-- [ ] Update the handoff and commit `feat: add application authentication contracts`.
+- [x] Write failing tests for valid login, generic invalid email/password, suspended account, refresh-token hashing, and seven-day expiry.
+- [x] Run the focused tests and verify missing application types are the failure reason.
+- [x] Implement constant-path password verification using a dummy BCrypt hash for absent users and never expose account-existence differences.
+- [x] Run focused tests (4 passed), then full Maven verification (17 passed).
+- [x] Update the handoff; commit follows this record update.
 
 ### Task 4: Add Spring Security and JWT adapters
 
