@@ -84,6 +84,11 @@ the latest run.
 - Added real-database integration tests for job isolation and candidate/application replay. These
   compile and are selected by `supabase-smoke`; their latest execution is blocked by remote pooler
   reachability and therefore is not counted as passing evidence.
+- Added the provider-free candidate import domain: canonical Google Form fields, required/unique
+  column mapping, bounded import aggregate, row state vocabulary, row validation results, and typed
+  normalization for email, dates, experience, notice period, and annual compensation.
+- Compensation normalization uses ISO currency minor units. `LPA` is accepted only with INR, and
+  `40 LPA` becomes `400,000,000` paise without floating-point arithmetic.
 
 ## Why this approach
 
@@ -128,6 +133,7 @@ from becoming database instructions.
 - Identity `contract` named interface plus the `jobs` and `candidates` domain/application/API/JDBC
   modules.
 - Flyway `V3__job_import_target_location.sql`.
+- Import `domain` and `application` types plus `ImportMappingTests`.
 - `AuthControllerTests`, `SecurityAdaptersTests`, `AuthenticationRuntimeConfigurationTests`,
   `DemoAdminProvisionerTests`, `PrioritySchemaMigrationIT`, `SupabaseSchemaSmokeIT`, and
   `SupabaseIdentityPersistenceIT`.
@@ -194,12 +200,17 @@ from becoming database instructions.
   the focused auth/jobs/architecture suite pass 16/16.
 - Candidate/application service red run — test compilation failed because the application port and
   typed models were absent. Green service plus module-boundary run passed 4/4.
+- Priority persistence foundation checkpoint committed as `c7037e6`.
 - Current network-free full verification: `mvn ... spotless:apply verify` — build succeeded; 36
   tests passed and Spotless reported all 72 Java files clean.
 - Latest `supabase-smoke` attempt: all 33 then-current local tests passed, but four integration tests
   failed to obtain a socket to the configured session pooler (`Permission denied: getsockopt`). An
   escalated retry remained blocked on the remote connection and was terminated; Flyway V3 was not
   claimed as applied.
+- Import-domain red run failed at test compilation because canonical mapping/state/validation types
+  were absent. The focused green run passed 7/7 import and module-boundary tests.
+- Current network-free full verification after import Task 1: `mvn ... spotless:apply verify` —
+  build succeeded; 42 tests passed and Spotless reported all 84 Java files clean.
 
 ## Blockers, prerequisites, and exact next step
 
@@ -209,7 +220,7 @@ from becoming database instructions.
   never committed.
 - AWS account, private S3/SQS resources, malware scanner choice, and a funded xAI key remain future
   external prerequisites for the two priority features.
-- Exact next step: begin the versioned candidate CSV mapping/validation domain against the completed
-  job and candidate/application ports. When the pooler is reachable, run the saved database-only
+- Exact next step: implement the bounded streaming CSV parser and mapping/preview API against the
+  completed import domain. When the pooler is reachable, run the saved database-only
   `supabase-smoke` command to apply V3 and close the persistence gate before wiring live frontend
-  HTTP gateways.
+  job/candidate HTTP gateways.

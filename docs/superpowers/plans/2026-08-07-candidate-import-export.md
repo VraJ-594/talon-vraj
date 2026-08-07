@@ -25,10 +25,10 @@
 
 **Interfaces:** Produces `ImportJob`, `ImportRow`, `CanonicalField`, `ColumnMapping`, `ImportStatus`, and `ImportRowStatus` matching the approved spec.
 
-- [ ] Write failing tests for required mappings, duplicate assignments, 2,000-row boundary, email/date/experience/notice validation, and LPA-to-paise normalization.
-- [ ] Run focused tests and confirm missing types cause failure.
-- [ ] Implement immutable domain state transitions and validation without persistence/provider code.
-- [ ] Run focused/full Maven verification and commit `feat: add candidate import domain`.
+- [x] Write failing tests for required mappings, duplicate assignments, 2,000-row boundary, email/date/experience/notice validation, and LPA-to-paise normalization.
+- [x] Run focused tests and confirm missing types cause failure.
+- [x] Implement immutable domain state transitions and validation without persistence/provider code.
+- [x] Run focused/full Maven verification and commit `feat: add candidate import domain`.
 
 ### Task 2: Streaming CSV validation and preview
 
