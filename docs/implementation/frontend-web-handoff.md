@@ -1,21 +1,29 @@
 # Priority Frontend Workstream Handoff
 
-- Status: Checkpoint 3 complete and user-approved; Checkpoint 4 candidate export is next
+- Status: Basic HTTP authentication integration implemented and automated gates green; live browser smoke pending
 - Branch/worktree: `codex/frontend-web` / `.worktrees/frontend-web`
 - Scope: Priority frontend workflows defined by `docs/prompts/frontend-parallel-session.md`
 - Updated: 2026-08-08
 
 ## Current checkpoint
 
-Checkpoints 1 and 2 received user visual sign-off in the local Vite session. Checkpoint 3 now supplies the fixture-backed post-import candidate review route: a dense candidate/application projection, selected application profile, normalized and additional form answers, role-sensitive compensation, resume processing status, and clean-file-only download. The completed import view links directly to candidate review. Export and search route content remains for later checkpoints.
+Checkpoints 1 through 3 are complete and received user visual sign-off. The current narrow checkpoint replaces fixture-only runtime authentication with the real backend login/session contract while preserving the signed-out and protected-shell presentation. Runtime auth now defaults to HTTP; fixture auth is available only through an explicit development opt-in. Candidate, job, and import runtime gateways remain fixtures pending their own API checkpoints. Export and all search behavior remain unimplemented.
 
-Checkpoint 3 code, test, formatting, lint, build, production dependency-audit, and whitespace gates are green. The user's first `/candidates` and mapping screenshots identified a repeated route heading and the browser-native mapping menu as visual problems. The route hierarchy is now singular and the strict canonical CSV contract replaces manual mapping controls with a compact recognized-column review. The user approved the refreshed frontend through Checkpoint 3 on 2026-08-08. Browser discovery returned no available browser instances, so automated desktop/narrow screenshots could not be captured.
+The HTTP gateway red test first failed because the gateway and central API client did not exist. The implemented gateway validates the backend's flat login/session responses, retains the bearer token only in the API client instance, includes credentials for the backend-set HttpOnly refresh cookie, maps stable RFC 9457 codes, and treats malformed success payloads as unavailable. A second red/green cycle proves fixture auth cannot activate in production. Automated formatting, lint, 72 tests, production build, production dependency audit, and whitespace gates are green. A live browser/API smoke still requires the updated backend process to be restarted.
 
 ## What changed
 
 - Replaced the broad Jobs fixture screen with a protected, PDF-directed ATS shell whose primary destinations are Candidates, Import applications, and Search.
 - Added a typed application-owned `AuthGateway` for session restoration, login, and logout.
 - Added an in-memory fixture gateway for the pre-provisioned `admin@talon.demo` Workspace Admin. It accepts any caller-supplied non-empty temporary password and commits no real/reusable password or token.
+- Added `workspaceId` to the authenticated frontend session while retaining the backend-provided workspace name.
+- Added a central `ApiClient` that owns the in-memory bearer token, applies authorization headers outside presentation components, and uses `credentials: 'include'` without reading the refresh cookie.
+- Added `HttpAuthGateway` for `POST /api/v1/auth/login` and bearer-authenticated `GET /api/v1/session`, including strict response mapping and safe RFC 9457 problem-code handling.
+- Kept basic-checkpoint logout local: it clears the in-memory token/session and performs no deferred server logout or refresh rotation.
+- Changed runtime auth to HTTP by default. Fixture auth requires `VITE_AUTH_MODE=fixture` and is ignored in production builds.
+- Added a Vite `/api` development proxy to `http://localhost:8080`; `VITE_API_BASE_URL` remains available for deployments that use a configured API origin.
+- Removed the synthetic demo email and workspace copy from the runtime sign-in screen; the production bundle contains no auth-fixture identity markers.
+- Tightened `accessTokenExpiresAt` validation to the backend's UTC ISO `Instant` shape, including calendar-valid date/time components.
 - Added accessible email/password sign-in, password visibility, pending submission, generic invalid credentials, locked/rate-limited, unavailable, and expired-session states.
 - Added protected-route redirects, safe return to an allowlisted requested priority route after login, restored-session behavior, and awaited logout.
 - Added an application error boundary with a recovery route and no raw error disclosure.
@@ -51,7 +59,7 @@ Checkpoint 3 code, test, formatting, lint, build, production dependency-audit, a
 
 ## Why this approach
 
-Authentication is kept behind a frontend-owned port so the UI and behavior can be completed against a non-sensitive fixture today and wired to the application-owned backend identity module later. Session state exists only in component/module memory; neither candidate PII nor credentials/tokens enter local storage.
+Authentication remains behind the frontend-owned port, but the default runtime adapter now calls the application-owned backend identity module. A central client owns bearer propagation so components never receive tokens or `fetch`; the backend-set refresh cookie stays opaque to JavaScript. Session/token state exists only in memory, so a browser reload deliberately returns to sign-in until refresh rotation is implemented. The fixture adapter remains useful for tests and explicit local UI-only work without becoming a production fallback.
 
 The route registry is an allowlist rather than an arbitrary post-login redirect. This preserves the requested priority destination while preventing open redirect behavior. Navigation excludes every deferred module so the shell describes the product currently being built rather than presenting dead links.
 
@@ -68,9 +76,13 @@ The candidate composition extends the existing Talon visual language: an operati
 - `apps/web/src/app/App.tsx`: session bootstrap, safe protected routing, logout, route registry, sidebar, header, and priority placeholders.
 - `apps/web/src/app/AppErrorBoundary.tsx`: route-level safe recovery surface.
 - `apps/web/src/features/auth/authGateway.ts`: frontend-owned auth types and error vocabulary.
-- `apps/web/src/features/auth/fixtureAuthGateway.ts`: memory-only demo identity adapter.
+- `apps/web/src/lib/apiClient.ts`: central cookie-aware request client and in-memory bearer propagation.
+- `apps/web/src/features/auth/httpAuthGateway.ts`: validated login/session HTTP adapter and safe problem mapping.
+- `apps/web/src/features/auth/runtimeAuthGateway.ts`: HTTP-default runtime selection with development-only fixture opt-in.
+- `apps/web/src/features/auth/fixtureAuthGateway.ts`: memory-only synthetic identity adapter for tests and explicit development use.
 - `apps/web/src/features/auth/SignInPage.tsx`: accessible sign-in form and mapped recovery messages.
-- `apps/web/src/main.tsx`: production composition root that injects the fixture adapter pending backend auth.
+- `apps/web/src/main.tsx`: composition root that selects the HTTP auth adapter by default.
+- `apps/web/vite.config.ts`: same-origin `/api` development proxy to the local Spring Boot API.
 - `apps/web/src/styles.css`: responsive sign-in and protected-shell presentation.
 - `apps/web/src/features/jobs/jobGateway.ts`: import-target job contract.
 - `apps/web/src/features/jobs/fixtureJobGateway.ts`: synthetic open-job adapter.
@@ -97,9 +109,16 @@ The candidate composition extends the existing Talon visual language: an operati
 - `apps/web/src/features/auth/authGateway.ts`
 - `apps/web/src/features/auth/fixtureAuthGateway.ts`
 - `apps/web/src/features/auth/fixtureAuthGateway.test.ts`
+- `apps/web/src/features/auth/httpAuthGateway.ts`
+- `apps/web/src/features/auth/httpAuthGateway.test.ts`
+- `apps/web/src/features/auth/runtimeAuthGateway.ts`
+- `apps/web/src/features/auth/runtimeAuthGateway.test.ts`
 - `apps/web/src/features/auth/SignInPage.tsx`
+- `apps/web/src/lib/apiClient.ts`
+- `apps/web/src/vite-env.d.ts`
 - `apps/web/src/features/auth/AuthFlow.test.tsx`
 - `apps/web/src/main.tsx`
+- `apps/web/vite.config.ts`
 - `apps/web/src/styles.css`
 - `docs/implementation/frontend-web-handoff.md`
 - `apps/web/src/features/jobs/jobGateway.ts`
@@ -170,13 +189,27 @@ The candidate composition extends the existing Talon visual language: an operati
 | Final `git diff --check` for Checkpoint 3 | Passed with no whitespace errors. |
 | Checkpoint 3 interactive visual review | User approved the refreshed frontend through `/candidates` and the refined canonical mapping view on 2026-08-08. Automated screenshots remain unavailable because browser discovery returned no available browser instances. |
 | Refreshed local route smoke | `http://localhost:5173/candidates` and `/imports` both returned HTTP 200 from the user's running isolated-worktree Vite server. |
+| HTTP authentication red cycle | Focused Vitest run failed before collection because `httpAuthGateway` did not exist, proving the new contract test preceded the adapter. |
+| HTTP authentication focused green | `httpAuthGateway.test.ts`, `fixtureAuthGateway.test.ts`, and `AuthFlow.test.tsx` passed 25/25, covering flat response mapping, cookie-aware requests, central bearer headers, local logout, safe error codes, storage absence, and unchanged UI routing. |
+| Runtime adapter-selection red/green cycle | Focused test first failed because `runtimeAuthGateway` did not exist; final HTTP/fixture selection suites passed 14/14 and prove fixture mode is development-only. |
+| Final `npm run format:check:web` for HTTP auth | Passed: all matched files use Prettier style. |
+| Final `npm run lint:web` for HTTP auth | Passed with zero warnings/errors. An initial run identified two unused destructured response fields; explicit session mapping removed the root cause. |
+| Review-remediation red/green cycle | Three non-ISO/invalid-calendar timestamp cases and one hardcoded-demo-copy check failed for the intended gaps; the strict Instant validator and credential-neutral sign-in copy made the focused suites pass 27/27. |
+| Final `npm run test:web` for HTTP auth | Passed: 10 files, 72 tests, 0 failures. |
+| Final `npm run build:web` for HTTP auth | Passed: TypeScript and Vite production build; 1,690 modules transformed. |
+| Final `npm audit --omit=dev` for HTTP auth | Passed: found 0 vulnerabilities. |
+| Final `git diff --check` for HTTP auth | Passed with no whitespace errors. |
+| Production auth-fixture scan | Passed: built assets contain none of `admin@talon.demo`, `fixture-workspace-admin`, or `fixture-talon-workspace`. |
+| Independent HTTP-auth code review | Approved with no remaining Critical or Important findings after strict timestamp and production-fixture remediation. No `apps/api/**` changes detected. |
+| Local process availability check | `http://localhost:8080/actuator/health` returned `UP` and `http://localhost:5173` returned HTTP 200. The backend process was not restarted in this checkpoint, so these responses are not counted as current-code login E2E evidence. |
 
 ## Integration status
 
-- Authentication integration: typed fixture only. The gateway boundary is ready; no HTTP adapter exists yet.
-- Session storage: module/component memory only. No `localStorage` token or identity persistence.
-- Backend API integration: none in this checkpoint.
-- Demo identity: synthetic Workspace Admin `admin@talon.demo`; no candidate PII and no embedded password.
+- Authentication integration: `HttpAuthGateway` implements the confirmed login/session contract and is the default runtime adapter. Automated contract coverage is green; live browser E2E remains pending a backend restart.
+- Session storage: access token and session remain in object/component memory only. No token or identity enters `localStorage` or `sessionStorage`; the refresh cookie is backend-set HttpOnly state and is never read by frontend code.
+- Refresh limitation: refresh rotation and server logout are deliberately deferred. Local logout clears memory and returns to sign-in; a full browser reload also requires sign-in again.
+- Backend API integration: authentication only. Candidate, job, import, resume, and export runtime adapters remain typed fixtures.
+- Demo identity: real demo credentials remain only in ignored backend environment files. The synthetic `admin@talon.demo` adapter is limited to tests or explicit `VITE_AUTH_MODE=fixture` development sessions.
 - Visual review: all nine supplied PDF pages were inspected as design input. The user approved the completed sign-in, protected shell, `/imports`, and candidate-review workflow in the local Vite session; browser automation remains unavailable for screenshot evidence.
 - Job/import integration: typed fixtures only. No real CSV, Drive, queue, storage, or candidate API is called.
 - Fixture persistence: safe runtime metadata is keyed by opaque import ID, and the documented fixture route restores a deterministic synthetic status. Real durability must come from backend import records; candidate values are not stored in browser storage.
@@ -188,37 +221,34 @@ The candidate composition extends the existing Talon visual language: an operati
 
 ## Backend contract requests
 
-The approved API surface names these endpoints; request/response fields and status mappings below need backend confirmation before the HTTP adapter is implemented.
+The authentication entries below are confirmed against the current backend tree and implemented by the frontend adapter. The remaining feature entries are frontend contract requests for later gateways.
 
 ### `POST /api/v1/auth/login`
 
 - Request fields: `email: string`, `password: string`.
-- Successful response needed by the gateway: `accessToken: string`, `expiresAt: string`, and `session` with `userId: string`, `displayName: string`, `workspaceName: string`, `role: WorkspaceRole`.
-- `WorkspaceRole` enum requested: `WORKSPACE_ADMIN | RECRUITER | HIRING_MANAGER | INTERVIEWER`.
-- The access token will remain in frontend memory. The refresh token must be set only by the backend as the approved HttpOnly, SameSite=Strict cookie.
+- Confirmed flat response: `userId`, `workspaceId`, `workspaceName`, `role`, `displayName`, `accessToken`, and ISO `accessTokenExpiresAt`.
+- Confirmed basic-auth roles: `WORKSPACE_ADMIN | RECRUITER`.
+- The gateway validates every field before retaining the access token. The backend sets the opaque refresh token as a Secure, HttpOnly, SameSite=Strict cookie; frontend code neither reads nor stores it.
 
 ### `POST /api/v1/auth/refresh`
 
-- No refresh token in the JSON request or frontend storage; the backend reads the refresh cookie.
-- Successful response needed: a replacement `accessToken`, `expiresAt`, and current `session` using the same fields/enums as login.
-- Terminal expired/revoked refresh behavior requested as `401` with stable code `SESSION_EXPIRED`.
+- Deferred from this basic-auth checkpoint. No frontend refresh request is made, and no refresh token enters JSON or frontend storage.
 
 ### `GET /api/v1/session`
 
-- Bearer access token supplied by the centralized future HTTP layer.
-- Successful response needed: `userId`, `displayName`, `workspaceName`, and `role`.
-- Unauthenticated/expired behavior requested as `401` with stable code `SESSION_EXPIRED`.
+- Bearer access token is supplied by the central `ApiClient`.
+- Confirmed response: `userId`, `workspaceId`, `workspaceName`, `role`, and `displayName`.
+- `SESSION_EXPIRED` clears in-memory auth before the frontend returns to sign-in.
 
 ### `POST /api/v1/auth/logout`
 
-- No JSON body required.
-- Successful response requested as `204`; backend revokes the refresh session and clears its cookie. The frontend awaits completion before discarding its in-memory session.
+- Deferred with refresh rotation. Current `logout()` performs no server call; it clears the in-memory access token/session locally.
 
 ### Problem response vocabulary
 
 - Stable frontend codes required for this checkpoint: `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED`, `RATE_LIMITED`, `API_UNAVAILABLE`, `SESSION_EXPIRED`.
 - `INVALID_CREDENTIALS` must not distinguish unknown email from bad password.
-- Problem body requested in the architecture RFC-style shape: `type`, `title`, `status`, `code`, `detail`, `correlationId`, and `fieldErrors`.
+- The adapter reads only the allowlisted `code` from RFC 9457 responses and never exposes backend `detail` to the sign-in UI. Malformed/unknown responses map to `API_UNAVAILABLE`.
 - Retryable rate-limit responses should include standards-compatible `Retry-After` information.
 
 ### `GET /api/v1/jobs`
@@ -260,5 +290,6 @@ The approved API surface names these endpoints; request/response fields and stat
 ## Blockers and exact next step
 
 - Automated screenshot comparison remains unavailable because browser discovery returned no available browser instances; user-driven visual review is the available evidence.
-- Real auth remains externally blocked on confirmed backend request/response fields and endpoints above. The fixture gateway is intentional until then.
-- Exact next step: commit the verified Checkpoint 3 state, then implement candidate CSV export states through the typed fixture boundary. Stop before adding any deterministic or natural-language search behavior.
+- Backend and frontend basic-auth implementations are present, but complete browser E2E evidence is pending restart of the updated API and a real login/logout/storage smoke.
+- Refresh rotation and server logout remain known deferred behavior; browser reload requires a new sign-in.
+- Exact next step: restart the API with the ignored Supabase/security environment, start the frontend without fixture mode, verify live login/session/logout and empty browser storage, then commit this auth checkpoint. Candidate export may follow only after that smoke; search remains untouched.

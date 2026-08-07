@@ -15,6 +15,7 @@ const authenticatedGateway: AuthGateway = {
   logout: async () => undefined,
   restoreSession: async () => ({
     userId: 'user-demo-admin',
+    workspaceId: 'workspace-talon-demo',
     displayName: 'Maya Reyes',
     workspaceName: 'Talon Demo',
     role: 'WORKSPACE_ADMIN',

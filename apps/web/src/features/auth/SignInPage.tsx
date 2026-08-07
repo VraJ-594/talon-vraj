@@ -107,12 +107,7 @@ export function SignInPage({ onLogin, statusMessage = null }: SignInPageProps) {
           <form onSubmit={submit}>
             <label>
               <span>Work email</span>
-              <input
-                name="email"
-                type="email"
-                autoComplete="email"
-                placeholder="admin@talon.demo"
-              />
+              <input name="email" type="email" autoComplete="email" placeholder="you@company.com" />
             </label>
             <label>
               <span>Password</span>
@@ -140,9 +135,7 @@ export function SignInPage({ onLogin, statusMessage = null }: SignInPageProps) {
               {submitting ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
-          <p className="fixture-note">
-            Demo workspace: <strong>admin@talon.demo</strong>. Use a temporary local password.
-          </p>
+          <p className="sign-in-help">Use the account provided by your workspace administrator.</p>
         </div>
       </section>
     </main>

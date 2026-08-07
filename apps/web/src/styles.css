@@ -1454,16 +1454,12 @@ kbd {
   background: #f1f2ff;
 }
 
-.fixture-note {
+.sign-in-help {
   margin: 20px 0 0;
   color: #8a8891;
   font-size: 11px;
   line-height: 1.5;
   text-align: center;
-}
-
-.fixture-note strong {
-  color: #66646d;
 }
 
 @media (max-width: 980px) {

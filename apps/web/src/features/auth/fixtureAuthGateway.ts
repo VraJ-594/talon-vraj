@@ -4,6 +4,7 @@ export const FIXTURE_ADMIN_EMAIL = 'admin@talon.demo';
 
 const FIXTURE_ADMIN_SESSION: AuthenticatedSession = {
   userId: 'fixture-workspace-admin',
+  workspaceId: 'fixture-talon-workspace',
   displayName: 'Maya Reyes',
   workspaceName: 'Talon Demo',
   role: 'WORKSPACE_ADMIN',

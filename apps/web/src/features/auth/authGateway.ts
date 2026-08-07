@@ -13,6 +13,7 @@ export type WorkspaceRole = 'WORKSPACE_ADMIN' | 'RECRUITER' | 'HIRING_MANAGER' |
 
 export type AuthenticatedSession = {
   readonly userId: string;
+  readonly workspaceId: string;
   readonly displayName: string;
   readonly workspaceName: string;
   readonly role: WorkspaceRole;

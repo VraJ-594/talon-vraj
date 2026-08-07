@@ -38,6 +38,7 @@ describe('authentication routing', () => {
         authGateway={{
           login: async () => ({
             userId: 'user-demo-admin',
+            workspaceId: 'workspace-talon-demo',
             displayName: 'Maya Reyes',
             workspaceName: 'Talon Demo',
             role: 'WORKSPACE_ADMIN',
@@ -68,6 +69,7 @@ describe('authentication routing', () => {
         authGateway={{
           login: async () => ({
             userId: 'user-demo-admin',
+            workspaceId: 'workspace-talon-demo',
             displayName: 'Maya Reyes',
             workspaceName: 'Talon Demo',
             role: 'WORKSPACE_ADMIN',
@@ -104,6 +106,7 @@ describe('authentication routing', () => {
           logout: async () => undefined,
           restoreSession: async () => ({
             userId: 'user-demo-admin',
+            workspaceId: 'workspace-talon-demo',
             displayName: 'Maya Reyes',
             workspaceName: 'Talon Demo',
             role: 'WORKSPACE_ADMIN',
@@ -134,6 +137,7 @@ describe('authentication routing', () => {
           logout: async () => logoutResult,
           restoreSession: async () => ({
             userId: 'user-demo-admin',
+            workspaceId: 'workspace-talon-demo',
             displayName: 'Maya Reyes',
             workspaceName: 'Talon Demo',
             role: 'WORKSPACE_ADMIN',
@@ -209,6 +213,29 @@ describe('authentication routing', () => {
     expect(screen.getByRole('button', { name: 'Hide password' })).toBeInTheDocument();
   });
 
+  it('does not ship fixture credentials in the runtime sign-in screen', async () => {
+    window.history.replaceState({}, '', '/sign-in');
+
+    render(
+      <App
+        authGateway={{
+          login: async () => {
+            throw new Error('Login is not used in this test');
+          },
+          logout: async () => undefined,
+          restoreSession: async () => null,
+        }}
+      />,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
+    expect(screen.queryByText(/admin@talon\.demo/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Work email' })).not.toHaveAttribute(
+      'placeholder',
+      'admin@talon.demo',
+    );
+  });
+
   it('disables submit while login is pending before entering candidates', async () => {
     const user = userEvent.setup();
     let finishLogin: ((session: AuthenticatedSession) => void) | undefined;
@@ -238,6 +265,7 @@ describe('authentication routing', () => {
 
     finishLogin?.({
       userId: 'user-demo-admin',
+      workspaceId: 'workspace-talon-demo',
       displayName: 'Maya Reyes',
       workspaceName: 'Talon Demo',
       role: 'WORKSPACE_ADMIN',

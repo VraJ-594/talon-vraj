@@ -15,6 +15,7 @@ describe('fixture authentication gateway', () => {
 
     expect(session).toEqual({
       userId: 'fixture-workspace-admin',
+      workspaceId: 'fixture-talon-workspace',
       displayName: 'Maya Reyes',
       workspaceName: 'Talon Demo',
       role: 'WORKSPACE_ADMIN',
