@@ -97,6 +97,10 @@ describe('ImportWizard recovery and lifecycle states', () => {
 
     expect(await screen.findByText('Import completed')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Download error CSV' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Review candidate applications' })).toHaveAttribute(
+      'href',
+      '/candidates',
+    );
   });
 
   it('maps retry and download failures to safe operation-specific messages', async () => {

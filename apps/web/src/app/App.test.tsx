@@ -1,9 +1,10 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import App from './App';
 import type { AuthGateway } from '../features/auth/authGateway';
+import { createFixtureCandidateGateway } from '../features/candidates/fixtureCandidateGateway';
 import { createFixtureJobGateway } from '../features/jobs/fixtureJobGateway';
 import { createFixtureImportGateway } from '../features/imports/fixtureImportGateway';
 
@@ -45,10 +46,44 @@ describe('Talon application shell', () => {
     render(<App authGateway={authenticatedGateway} />);
 
     expect(await screen.findByRole('heading', { name: 'Candidates' })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('main')).queryByRole('heading', { name: 'Candidates' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Candidates' })).toHaveAttribute(
       'aria-current',
       'page',
     );
+  });
+
+  it('renders the candidate application workspace on the protected candidate route', async () => {
+    render(
+      <App authGateway={authenticatedGateway} candidateGateway={createFixtureCandidateGateway()} />,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Application pipeline' }),
+    ).toBeInTheDocument();
+  });
+
+  it('moves from an empty candidate roster to import without reloading the session', async () => {
+    const user = userEvent.setup();
+    const fixtureCandidates = createFixtureCandidateGateway();
+
+    render(
+      <App
+        authGateway={authenticatedGateway}
+        candidateGateway={{ ...fixtureCandidates, listApplications: async () => [] }}
+        importGateway={createFixtureImportGateway()}
+        jobGateway={createFixtureJobGateway()}
+      />,
+    );
+
+    await user.click(await screen.findByRole('link', { name: 'Import candidates' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Select the target job' }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/imports');
   });
 
   it('requires an import target job before showing CSV upload', async () => {
@@ -87,12 +122,12 @@ describe('Talon application shell', () => {
     expect(screen.getByText(/2,000 data rows/)).toBeInTheDocument();
   });
 
-  it('turns arbitrary CSV headers into editable canonical mappings', async () => {
+  it('automatically reviews canonical CSV headers without manual mapping controls', async () => {
     const user = userEvent.setup();
     window.history.replaceState({}, '', '/imports');
     const csv = new File(
       [
-        'First Name,Last Name,Email Address,Resume Link,Expected CTC,Unit,Currency\n',
+        'FIRST_NAME,Last_Name,EMAIL,Resume_Drive_URL,Expected_CTC,CTC_UNIT,ctc_currency\n',
         'Sample,Applicant,sample@example.test,https://drive.google.com/file/d/demo/view,40,LPA,INR',
       ],
       'google-form-responses.csv',
@@ -111,12 +146,75 @@ describe('Talon application shell', () => {
     await user.click(screen.getByRole('button', { name: 'Continue to CSV upload' }));
     await user.upload(screen.getByLabelText('Application CSV'), csv);
 
-    expect(await screen.findByRole('heading', { name: 'Map CSV columns' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Map First Name' })).toHaveValue('first_name');
-    expect(screen.getByRole('combobox', { name: 'Map Resume Link' })).toHaveValue(
-      'resume_drive_url',
-    );
+    expect(
+      await screen.findByRole('heading', { name: 'Review recognized columns' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('7 columns recognized')).toBeInTheDocument();
+    const recognizedColumns = screen.getByRole('list', { name: 'Recognized CSV columns' });
+    const firstNameRow = within(recognizedColumns).getByText('FIRST_NAME').closest('li');
+    expect(firstNameRow).not.toBeNull();
+    expect(
+      within(firstNameRow!.querySelector('.mapping-target')!).getByText('Required'),
+    ).toBeInTheDocument();
+    expect(within(recognizedColumns).getByText('First name')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
     expect(screen.getByText(/LPA means annual INR/)).toBeInTheDocument();
+  });
+
+  it('rejects non-canonical CSV headers with template guidance', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState({}, '', '/imports');
+    const csv = new File(
+      [
+        'first_name,last_name,email,resume_drive_url,Current Salary\n',
+        'Sample,Applicant,sample@example.test,https://drive.google.com/file/d/demo/view,1200000',
+      ],
+      'unsupported-headers.csv',
+      { type: 'text/csv' },
+    );
+
+    render(
+      <App
+        authGateway={authenticatedGateway}
+        importGateway={createFixtureImportGateway()}
+        jobGateway={createFixtureJobGateway()}
+      />,
+    );
+
+    await user.click(await screen.findByRole('radio', { name: /Senior Backend Engineer/ }));
+    await user.click(screen.getByRole('button', { name: 'Continue to CSV upload' }));
+    await user.upload(screen.getByLabelText('Application CSV'), csv);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Use only column names from the Talon CSV template. Capitalization does not matter.',
+    );
+    expect(screen.getByRole('heading', { name: 'Upload application CSV' })).toBeInTheDocument();
+  });
+
+  it('identifies the required canonical headers when one is missing', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState({}, '', '/imports');
+    const csv = new File(
+      ['first_name,last_name,email\nSample,Applicant,sample@example.test'],
+      'missing-resume-header.csv',
+      { type: 'text/csv' },
+    );
+
+    render(
+      <App
+        authGateway={authenticatedGateway}
+        importGateway={createFixtureImportGateway()}
+        jobGateway={createFixtureJobGateway()}
+      />,
+    );
+
+    await user.click(await screen.findByRole('radio', { name: /Senior Backend Engineer/ }));
+    await user.click(screen.getByRole('button', { name: 'Continue to CSV upload' }));
+    await user.upload(screen.getByLabelText('Application CSV'), csv);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The CSV must include first_name, last_name, email, and resume_drive_url.',
+    );
   });
 
   it('validates, confirms, and completes an import with safe recovery actions', async () => {
@@ -124,7 +222,7 @@ describe('Talon application shell', () => {
     window.history.replaceState({}, '', '/imports');
     const csv = new File(
       [
-        'First Name,Last Name,Email,Resume Link\n',
+        'first_name,last_name,email,resume_drive_url\n',
         'One,Row,one@example.test,https://drive.google.com/file/d/one/view\n',
         'Two,Row,two@example.test,https://drive.google.com/file/d/two/view\n',
         'Three,Row,three@example.test,https://drive.google.com/file/d/three/view\n',
@@ -149,7 +247,7 @@ describe('Talon application shell', () => {
     await user.click(await screen.findByRole('radio', { name: /Senior Backend Engineer/ }));
     await user.click(screen.getByRole('button', { name: 'Continue to CSV upload' }));
     await user.upload(screen.getByLabelText('Application CSV'), csv);
-    await user.click(await screen.findByRole('button', { name: 'Validate mapped rows' }));
+    await user.click(await screen.findByRole('button', { name: 'Validate rows' }));
 
     expect(await screen.findByRole('heading', { name: 'Review validation' })).toBeInTheDocument();
     expect(screen.getByText('6 valid')).toBeInTheDocument();
@@ -187,5 +285,26 @@ describe('Talon application shell', () => {
 
     expect(await screen.findByRole('heading', { name: 'Import results' })).toBeInTheDocument();
     expect(screen.getByText('Completed with row errors')).toBeInTheDocument();
+  });
+
+  it('moves from completed import results to candidate review without reloading the session', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState({}, '', '/imports?importId=fixture-import-001');
+
+    render(
+      <App
+        authGateway={authenticatedGateway}
+        candidateGateway={createFixtureCandidateGateway()}
+        importGateway={createFixtureImportGateway()}
+        jobGateway={createFixtureJobGateway()}
+      />,
+    );
+
+    await user.click(await screen.findByRole('link', { name: 'Review candidate applications' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Application pipeline' }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/candidates');
   });
 });

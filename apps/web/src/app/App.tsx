@@ -8,6 +8,8 @@ import {
   type AuthGateway,
 } from '../features/auth/authGateway';
 import { SignInPage } from '../features/auth/SignInPage';
+import { CandidateWorkspace } from '../features/candidates/CandidateWorkspace';
+import type { CandidateGateway } from '../features/candidates/candidateGateway';
 import { ImportWizard } from '../features/imports/ImportWizard';
 import { isOpaqueImportId, type ImportGateway } from '../features/imports/importGateway';
 import type { JobGateway } from '../features/jobs/jobGateway';
@@ -63,6 +65,7 @@ function requestedLocation(path: string): PriorityRoute['path'] | `/imports?impo
 
 type AppProps = {
   readonly authGateway?: AuthGateway;
+  readonly candidateGateway?: CandidateGateway;
   readonly importGateway?: ImportGateway;
   readonly jobGateway?: JobGateway;
 };
@@ -182,12 +185,14 @@ function Sidebar({
 }
 
 function ProtectedWorkspace({
+  candidateGateway,
   importGateway,
   jobGateway,
   loggingOut,
   onLogout,
   session,
 }: {
+  readonly candidateGateway?: CandidateGateway;
   readonly importGateway: ImportGateway;
   readonly jobGateway: JobGateway;
   readonly loggingOut: boolean;
@@ -216,19 +221,16 @@ function ProtectedWorkspace({
       />
       <div className="app-content">
         <header className="topbar">
-          <strong>{route.pageTitle}</strong>
+          <h1>{route.pageTitle}</h1>
           <Link className="topbar-search-link" href="/search">
             <Search aria-hidden="true" size={17} />
             Search candidates
           </Link>
         </header>
         <main className="workspace priority-workspace">
-          <div className="workspace-heading">
-            <div>
-              <h1>{route.pageTitle}</h1>
-            </div>
-          </div>
-          {route.path === '/imports' ? (
+          {route.path === '/candidates' && candidateGateway ? (
+            <CandidateWorkspace candidateGateway={candidateGateway} role={session.role} />
+          ) : route.path === '/imports' ? (
             <ImportWizard importGateway={importGateway} jobGateway={jobGateway} />
           ) : (
             <section className="priority-placeholder" aria-label={`${route.pageTitle} foundation`}>
@@ -243,6 +245,7 @@ function ProtectedWorkspace({
 
 export default function App({
   authGateway = unconfiguredAuthGateway,
+  candidateGateway,
   importGateway = unconfiguredImportGateway,
   jobGateway = unconfiguredJobGateway,
 }: AppProps) {
@@ -303,6 +306,7 @@ export default function App({
 
   return (
     <ProtectedWorkspace
+      candidateGateway={candidateGateway}
       importGateway={importGateway}
       jobGateway={jobGateway}
       loggingOut={loggingOut}

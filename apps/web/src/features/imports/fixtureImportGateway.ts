@@ -12,31 +12,33 @@ import type {
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_DATA_ROWS = 2_000;
 
-const HEADER_ALIASES: Readonly<Record<string, CanonicalField>> = {
-  firstname: 'first_name',
-  lastname: 'last_name',
-  email: 'email',
-  emailaddress: 'email',
-  resume: 'resume_drive_url',
-  resumelink: 'resume_drive_url',
-  resumedriveurl: 'resume_drive_url',
-  phone: 'phone',
-  location: 'location',
-  totalexperienceyears: 'total_experience_years',
-  currentcompany: 'current_company',
-  currenttitle: 'current_title',
-  skills: 'skills',
-  currentctc: 'current_ctc',
-  expectedctc: 'expected_ctc',
-  unit: 'ctc_unit',
-  ctcunit: 'ctc_unit',
-  currency: 'ctc_currency',
-  ctccurrency: 'ctc_currency',
-  noticeperioddays: 'notice_period_days',
-  availabilitydate: 'availability_date',
-  source: 'source',
-  applicationdate: 'application_date',
-};
+const CANONICAL_FIELDS: readonly CanonicalField[] = [
+  'first_name',
+  'last_name',
+  'email',
+  'resume_drive_url',
+  'phone',
+  'location',
+  'total_experience_years',
+  'current_company',
+  'current_title',
+  'skills',
+  'current_ctc',
+  'expected_ctc',
+  'ctc_unit',
+  'ctc_currency',
+  'notice_period_days',
+  'availability_date',
+  'source',
+  'application_date',
+];
+
+const REQUIRED_FIELDS: readonly CanonicalField[] = [
+  'first_name',
+  'last_name',
+  'email',
+  'resume_drive_url',
+];
 
 type SafeImportRecord = {
   readonly id: string;
@@ -120,18 +122,23 @@ function parseCsv(text: string): readonly (readonly string[])[] {
   return records.filter((candidate) => candidate.some((field) => field.trim().length > 0));
 }
 
-function suggestMapping(columns: readonly string[]): ColumnMapping {
-  const selected = new Set<CanonicalField>();
+function canonicalMapping(columns: readonly string[]): ColumnMapping {
+  const allowed = new Set<string>(CANONICAL_FIELDS);
+  const normalized = columns.map((column) => column.toLowerCase());
+  if (normalized.some((column) => !allowed.has(column))) {
+    throw problem(
+      'UNSUPPORTED_SOURCE_COLUMN',
+      'The CSV contains a column that is not in the canonical import template.',
+    );
+  }
+  if (REQUIRED_FIELDS.some((field) => !normalized.includes(field))) {
+    throw problem(
+      'MISSING_REQUIRED_COLUMN',
+      'The CSV is missing a required canonical import column.',
+    );
+  }
   return Object.fromEntries(
-    columns.map((column) => {
-      const normalized = column.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const suggestion = HEADER_ALIASES[normalized];
-      if (!suggestion || selected.has(suggestion)) {
-        return [column, ''];
-      }
-      selected.add(suggestion);
-      return [column, suggestion];
-    }),
+    columns.map((column, index) => [column, normalized[index] as CanonicalField]),
   );
 }
 
@@ -237,6 +244,7 @@ export function createFixtureImportGateway(): ImportGateway {
         throw problem('TOO_MANY_ROWS', 'Choose a CSV with no more than 2,000 data rows.');
       }
 
+      const recognizedMapping = canonicalMapping(sourceColumns);
       const id = `fixture-import-${String(nextId).padStart(3, '0')}`;
       nextId += 1;
       imports.set(id, { id, rowCount });
@@ -247,7 +255,7 @@ export function createFixtureImportGateway(): ImportGateway {
         fileName: file.name,
         rowCount,
         sourceColumns,
-        suggestedMapping: suggestMapping(sourceColumns),
+        suggestedMapping: recognizedMapping,
       };
     },
     async validate({ importId, mapping }) {

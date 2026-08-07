@@ -1,5 +1,13 @@
-import { BriefcaseBusiness, Download, FileSpreadsheet, MapPin } from 'lucide-react';
+import {
+  ArrowRight,
+  BriefcaseBusiness,
+  CircleCheck,
+  Download,
+  FileSpreadsheet,
+  MapPin,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'wouter';
 
 import type { ImportTargetJob, JobGateway } from '../jobs/jobGateway';
 import type {
@@ -14,11 +22,15 @@ import type {
 } from './importGateway';
 import { isImportProblem, isOpaqueImportId } from './importGateway';
 
-const CANONICAL_FIELDS: readonly { readonly value: CanonicalField; readonly label: string }[] = [
-  { value: 'first_name', label: 'First name (required)' },
-  { value: 'last_name', label: 'Last name (required)' },
-  { value: 'email', label: 'Email (required)' },
-  { value: 'resume_drive_url', label: 'Public Drive resume URL (required)' },
+const CANONICAL_FIELDS: readonly {
+  readonly value: CanonicalField;
+  readonly label: string;
+  readonly required?: boolean;
+}[] = [
+  { value: 'first_name', label: 'First name', required: true },
+  { value: 'last_name', label: 'Last name', required: true },
+  { value: 'email', label: 'Email', required: true },
+  { value: 'resume_drive_url', label: 'Public Drive resume URL', required: true },
   { value: 'phone', label: 'Phone' },
   { value: 'location', label: 'Location' },
   { value: 'total_experience_years', label: 'Total experience (years)' },
@@ -68,7 +80,7 @@ type ImportOperation =
 const OPERATION_FAILURE_MESSAGES: Readonly<Record<ImportOperation, string>> = {
   restore: 'Import progress couldn’t be loaded. Try again.',
   upload: 'The CSV couldn’t be uploaded. Check the file and try again.',
-  validate: 'The mapped rows couldn’t be validated. Review the mapping and try again.',
+  validate: 'The rows couldn’t be validated. Review the CSV and try again.',
   confirm: 'The import couldn’t be confirmed. Try again.',
   refresh: 'Import progress couldn’t be refreshed. Try again.',
   retry: 'The row couldn’t be retried. Try again.',
@@ -87,6 +99,12 @@ function safeImportError(error: unknown, operation: ImportOperation): string {
     if (error.code === 'TOO_MANY_ROWS') return 'Choose a CSV with no more than 2,000 data rows.';
     if (error.code === 'DUPLICATE_SOURCE_COLUMN') {
       return 'Each CSV source column needs a unique header.';
+    }
+    if (error.code === 'UNSUPPORTED_SOURCE_COLUMN') {
+      return 'Use only column names from the Talon CSV template. Capitalization does not matter.';
+    }
+    if (error.code === 'MISSING_REQUIRED_COLUMN') {
+      return 'The CSV must include first_name, last_name, email, and resume_drive_url.';
     }
     if (error.code === 'DUPLICATE_MAPPING') return 'Map each canonical field only once.';
     if (error.code === 'MISSING_REQUIRED_MAPPING') {
@@ -116,7 +134,7 @@ const STEP_NUMBER: Readonly<Record<WizardStep, number>> = {
 const STEP_TITLE: Readonly<Record<WizardStep, string>> = {
   TARGET: 'Select the target job',
   UPLOAD: 'Upload application CSV',
-  MAP: 'Map CSV columns',
+  MAP: 'Review recognized columns',
   PREVIEW: 'Review validation',
   CONFIRM: 'Confirm application import',
   PROGRESS: 'Import in progress',
@@ -140,7 +158,6 @@ export function ImportWizard({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
-  const [retainUnmapped, setRetainUnmapped] = useState(false);
   const [pendingOperation, setPendingOperation] = useState<ImportOperation | null>(null);
   const [restoreFailed, setRestoreFailed] = useState(false);
   const [restoreAttempt, setRestoreAttempt] = useState(0);
@@ -220,11 +237,11 @@ export function ImportWizard({
           {step === 'TARGET'
             ? 'Every row in this CSV will become an application for one job.'
             : step === 'UPLOAD'
-              ? 'Use the canonical template or upload a Google Forms response CSV.'
+              ? 'Use Talon template column names. Capitalization does not matter.'
               : step === 'MAP'
                 ? `${draft?.rowCount ?? 0} rows detected in ${draft?.fileName ?? 'your CSV'}.`
                 : step === 'PREVIEW'
-                  ? 'Resolve mapping issues before creating applications.'
+                  ? 'Review row validation before creating applications.'
                   : step === 'CONFIRM'
                     ? 'This confirmation starts durable background processing.'
                     : step === 'PROGRESS'
@@ -315,6 +332,9 @@ export function ImportWizard({
               {pendingOperation === 'download' ? 'Downloading…' : 'Download error CSV'}
             </button>
           ) : null}
+          <Link className="primary-button result-review-link" href="/candidates">
+            Review candidate applications
+          </Link>
         </div>
       ) : step === 'PROGRESS' && progress ? (
         <div className="progress-step">
@@ -423,6 +443,13 @@ export function ImportWizard({
         </div>
       ) : step === 'MAP' && draft ? (
         <div className="mapping-step">
+          <div className="recognized-column-summary">
+            <CircleCheck aria-hidden="true" size={20} />
+            <span>
+              <strong>{draft.sourceColumns.length} columns recognized</strong>
+              <small>Names matched automatically against the Talon template.</small>
+            </span>
+          </div>
           <div className="mapping-guidance">
             <strong>Compensation normalization</strong>
             <p>
@@ -430,50 +457,31 @@ export function ImportWizard({
               Experience becomes months; notice becomes days; dates use ISO format.
             </p>
           </div>
-          <div className="mapping-list">
+          <ul className="mapping-list" aria-label="Recognized CSV columns">
             {draft.sourceColumns.map((sourceColumn) => {
-              const selectedValues = Object.entries(mapping)
-                .filter(([otherSource]) => otherSource !== sourceColumn)
-                .map(([, canonical]) => canonical);
+              const canonical = mapping[sourceColumn];
+              const field = CANONICAL_FIELDS.find((candidate) => candidate.value === canonical);
               return (
-                <label key={sourceColumn} className="mapping-row">
-                  <span>
+                <li key={sourceColumn} className="mapping-row">
+                  <span className="mapping-source">
                     <small>CSV column</small>
                     <strong>{sourceColumn}</strong>
                   </span>
-                  <select
-                    aria-label={`Map ${sourceColumn}`}
-                    value={mapping[sourceColumn] ?? ''}
-                    onChange={(event) =>
-                      setMapping((current) => ({
-                        ...current,
-                        [sourceColumn]: event.target.value as CanonicalField | '',
-                      }))
-                    }
-                  >
-                    <option value="">Do not import</option>
-                    {CANONICAL_FIELDS.map((field) => (
-                      <option
-                        key={field.value}
-                        value={field.value}
-                        disabled={selectedValues.includes(field.value)}
-                      >
-                        {field.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                  <ArrowRight className="mapping-arrow" aria-hidden="true" size={16} />
+                  <span className="mapping-target">
+                    <span className="mapping-target-label">
+                      <small>Talon field</small>
+                      {field?.required ? (
+                        <small className="mapping-required">Required</small>
+                      ) : null}
+                    </span>
+                    <strong>{field?.label}</strong>
+                  </span>
+                  <CircleCheck className="mapping-check" aria-hidden="true" size={18} />
+                </li>
               );
             })}
-          </div>
-          <label className="retain-unmapped">
-            <input
-              type="checkbox"
-              checked={retainUnmapped}
-              onChange={(event) => setRetainUnmapped(event.target.checked)}
-            />
-            Retain unmapped columns as additional form answers
-          </label>
+          </ul>
           <button
             className="primary-button"
             type="button"
@@ -482,7 +490,7 @@ export function ImportWizard({
               setPendingOperation('validate');
               setOperationError(null);
               void importGateway
-                .validate({ importId: draft.id, mapping, retainUnmapped })
+                .validate({ importId: draft.id, mapping, retainUnmapped: false })
                 .then((validated) => {
                   setPreview(validated);
                   setStep('PREVIEW');
@@ -491,7 +499,7 @@ export function ImportWizard({
                 .finally(() => setPendingOperation(null));
             }}
           >
-            {pendingOperation === 'validate' ? 'Validating…' : 'Validate mapped rows'}
+            {pendingOperation === 'validate' ? 'Validating…' : 'Validate rows'}
           </button>
         </div>
       ) : step === 'UPLOAD' ? (
