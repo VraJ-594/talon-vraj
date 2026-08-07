@@ -115,6 +115,14 @@ the latest run.
   `LeakyBucket`. The approved defaults are represented by construction inputs: five starts per
   second, burst capacity five, and five in flight. Fetch execution also has response and total
   operation deadlines; interrupted/timed-out downloads release their concurrency permit.
+- Added the application-owned `ObjectStorage` contract, opaque `PrivateObjectKey` factories, and a
+  local filesystem adapter. Resume keys contain workspace/file/version UUIDs only; import/export
+  keys contain workspace/import-or-export UUIDs only. Arbitrary paths, traversal, names, emails,
+  and source URLs
+  cannot enter the key type.
+- Local writes stream through a hard caller-supplied limit into a same-directory temporary object,
+  calculate SHA-256, and atomically publish the completed object. Limit/I/O failures remove the
+  temporary file. Promotion only accepts a quarantine resume and its exact derived clean key.
 
 ## Why this approach
 
@@ -164,6 +172,7 @@ from becoming database instructions.
   and the Apache Commons CSV dependency in `apps/api/pom.xml`.
 - File-source application contracts and `files/infrastructure/drive` HTTP adapter.
 - Generic `platform/ratelimit` contract, `LeakyBucket`, named Modulith interface, and focused tests.
+- `files/application` private-object contracts and `files/infrastructure/storage/LocalObjectStorage`.
 - `AuthControllerTests`, `SecurityAdaptersTests`, `AuthenticationRuntimeConfigurationTests`,
   `DemoAdminProvisionerTests`, `PrioritySchemaMigrationIT`, `SupabaseSchemaSmokeIT`, and
   `SupabaseIdentityPersistenceIT`.
@@ -257,6 +266,13 @@ from becoming database instructions.
 - Current network-free full verification after import Task 3: `mvn ... spotless:apply verify` —
   build succeeded; 61 tests passed, the executable JAR was produced, and Spotless reported all 109
   Java files clean.
+- Private-storage red run failed at test compilation because the key/storage/metadata types and
+  local adapter were absent. The first green behavior run exposed only sandbox cleanup failures from
+  JUnit allocating `@TempDir` under C:. Moving synthetic test roots beneath the E:-drive Maven
+  `target` directory made the storage, Drive, and architecture suite pass 15/15.
+- Current network-free full verification after the Task 4 local-storage checkpoint:
+  `mvn ... spotless:apply verify` — build succeeded; 65 tests passed, the executable JAR was
+  produced, and Spotless reported all 115 Java files clean.
 
 ## Blockers, prerequisites, and exact next step
 
@@ -266,8 +282,8 @@ from becoming database instructions.
   never committed.
 - AWS account, private S3/SQS resources, malware scanner choice, a funded xAI key, and one synthetic
   anonymously downloadable Drive PDF for a live provider smoke remain future external prerequisites.
-- Exact next step: implement the private object-storage/quarantine boundary, beginning with its
-  local filesystem adapter and security contract, then add the S3 implementation and Terraform
-  public-access assertions behind the same port. When the pooler is reachable, run the saved
+- Exact next step: add the fail-closed scanner and bounded PDF text-extraction ports/adapters, plus
+  clean-only download authorization. Then implement the S3 adapter and Terraform public-access
+  assertions behind the completed `ObjectStorage` port. When the pooler is reachable, run the saved
   database-only `supabase-smoke` command to apply V3 and close the persistence gate before wiring
   live frontend job/candidate HTTP gateways.
