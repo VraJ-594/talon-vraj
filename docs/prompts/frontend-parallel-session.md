@@ -1,168 +1,172 @@
-# Prompt: Parallel Talon ATS Frontend Implementation Session
+# Prompt: Priority Talon ATS Frontend Session
 
-Copy the prompt below into the separate frontend session. Start that session only in its own Git worktree/branch so it cannot overwrite the backend session.
+Copy everything below the divider into the existing frontend session. This replaces the earlier broad frontend prompt.
 
 ---
 
-You are implementing the complete production-quality frontend for the Talon ATS repository.
+Continue the Talon ATS frontend from its current green baseline. Repository context, all nine rendered PDF pages, architecture, existing frontend code/tests, and Git state have already been reviewed. Do not repeat broad product discovery.
 
-## Repository and isolation
+The governing design is approved and lives at:
 
-- Main repository: `E:\Project\LiveBuildTask`
-- Create or use a separate worktree such as `E:\Project\LiveBuildTask-web`.
-- Create branch `codex/frontend-web` from the latest `codex/phase-1-baseline` commit.
-- Never work on the backend session's branch and never edit the same physical worktree concurrently.
-- Before changing code, read the root `AGENTS.md` completely and obey its implementation-record requirement.
-- Maintain `docs/implementation/frontend-web-handoff.md` throughout the session. At every checkpoint record what was done, why, how, verification evidence, unresolved API needs, blockers, and next steps.
+`docs/superpowers/specs/2026-08-07-priority-import-export-search-design.md`
 
-If the worktree has not been created yet, first inspect repository status and use the repository's worktree workflow. Do not discard or overwrite existing changes.
+Read that specification, root `AGENTS.md`, and the current frontend handoff completely. Treat the approved spec as the answer to previous shell/router scope questions. Ask the user only if the repository contradicts the approved design in a way that changes behavior.
 
-## Required context review
+## Branch and ownership
 
-Before implementation, read all of the following:
+- Work only in the frontend worktree/branch `codex/frontend-web`.
+- Own `apps/web/**` and `docs/implementation/frontend-web-handoff.md`.
+- Do not edit `apps/api/**`, Flyway migrations, `compose.yaml`, Terraform, or backend-owned API contracts.
+- Maintain the frontend handoff after every checkpoint: what, why, how, files, verification, blockers, mock/real integration status, and next step.
 
-- `Talon ATS.pdf` — inspect and render every relevant screen; do not rely only on extracted text.
-- `initial_requirements.txt`
-- `docs/plans/talon-ats-implementation-plan.md`
-- `docs/architecture/hld.md`
-- `docs/architecture/lld.md`
-- `docs/architecture/api-design.md`
-- `docs/architecture/database-design.md`
-- `docs/architecture/security-threat-model.md`
-- `docs/architecture/deployment-and-testing.md`
-- `docs/implementation/phase-01-executable-baseline.md`
-- Existing frontend code and tests under `apps/web`.
+## Why the scope changed
 
-Use the PDF and frontend-design skills for visual decisions, the TDD skill for feature work, systematic debugging for failures, and verification-before-completion before any success claim. Use the approved browser skill for rendered UI inspection and local interaction testing when available.
+The first demonstrable product is now intentionally centered on two complete workflows:
 
-## Ownership boundaries
+1. Candidate job-application CSV import/export with required Drive PDF resumes.
+2. Candidate/application search using deterministic Cmd+K plus Grok-translated natural language.
 
-This session owns:
+Calendar, interviews, offers, reports, notifications, advanced authentication, AI scoring, and other screens would consume time without proving these priority workflows. Preserve clean module boundaries, but do not build deferred screens.
 
-- `apps/web/**`
-- Frontend-only tests and frontend test fixtures
-- `docs/implementation/frontend-web-handoff.md`
-- Frontend-specific API-needs notes inside that handoff
-
-This session does not own and must not modify without explicit coordination:
-
-- `apps/api/**`
-- `compose.yaml`
-- Backend Flyway migrations or Java domain code
-- Terraform/AWS resources
-- Approved architecture decisions
-- Backend-generated OpenAPI artifacts
-
-The backend session owns the real API and database. Do not invent a second backend, Supabase-direct browser data access, production credentials, or frontend-only authorization rules.
-
-## Current baseline
-
-- React 19, strict TypeScript, Vite, Vitest, Testing Library, ESLint, Prettier, and Lucide are configured.
-- A PDF-directed Jobs/dashboard shell exists in `apps/web/src/app/App.tsx` with smoke tests and responsive CSS.
-- Current job rows are isolated design fixtures, not production persistence.
-- Docker/local PostgreSQL verification may still be pending. You may build against typed fixture adapters while it is pending, but you must not claim real end-to-end integration until the backend contract and services are available.
-- Authentication, routing, shared components, feature modules, generated API client, Playwright, and the remaining product screens still need implementation.
-
-## Goal
-
-Build a cohesive, accessible ATS web application covering:
-
-1. Sign-in/sign-up, OAuth entry, 2FA enrollment/challenge, invitation, and workspace onboarding screens.
-2. Sectioned recruiting sidebar, responsive application shell, notifications, account menu, and Cmd/Ctrl+K command search.
-3. Department-grouped Jobs list and multi-step New Job wizard.
-4. Candidate pipeline Kanban with stage movement, conversion/time metrics, filtering, and responsive overflow.
-5. Candidate profile with activity, email, interview, scorecard, and file areas.
-6. Review inbox with resume triage, signal presentation, bulk selection, advance, and reject actions.
-7. Offer builder, ordered approval-chain editor, approval status, and letter preview.
-8. Scheduling grid and calendar-connection states.
-9. CSV import workflow, validation/error summary, progress, and bulk actions.
-10. Reports for hiring KPIs, funnel conversion, sources, and interview-volume trends.
-11. Loading, empty, error, forbidden, offline/retry, and destructive-confirmation states appropriate to each workflow.
-
-Follow the supplied design faithfully while creating reusable primitives and feature boundaries. Preserve a clear path from fixtures to the generated API client; do not scatter mock data through presentation components.
-
-## Architecture to implement
-
-Organize by product feature, with a small shared layer. A practical target is:
+## Implement only these feature modules
 
 ```text
 apps/web/src/
-  app/                 # providers, router, layouts, route guards
-  components/          # genuinely shared UI primitives
+  app/                    providers, router, protected layout, error boundary
+  components/             genuinely shared accessible primitives
   features/
-    auth/
-    jobs/
-    candidates/
-    pipeline/
-    review/
-    offers/
-    scheduling/
-    imports/
-    reports/
-    search/
-    notifications/
-  lib/                 # HTTP client, errors, dates, validation helpers
-  test/                # shared test setup/builders
+    auth/                 sign-in/session/logout only
+    jobs/                 import-target job selector
+    imports/              CSV application import wizard
+    candidates/           list and basic candidate/application profile
+    exports/              filtered CSV export jobs/download
+    search/               Cmd+K and natural-language candidate search
+  lib/                    typed HTTP/error/date/currency helpers
+  test/                   shared fixtures and builders
 ```
 
-For every feature:
+## Checkpoint 1: Sign-in and protected shell
 
-- Keep route/page composition separate from reusable view components.
-- Put remote calls behind a typed feature gateway/repository interface.
-- Keep fixtures in explicit test/demo adapters that implement the same interface.
-- Centralize query keys, error translation, and request cancellation when server-state tooling is introduced.
-- Treat backend authorization failures as authoritative; route guards improve UX but are not security controls.
-- Use composition over large conditional components.
+Match the supplied authentication screen and ATS shell design direction.
 
-Do not add a library until the current feature needs it. If adding routing, server-state, forms/schema validation, accessible primitives, charts, drag-and-drop, dates, or Playwright, select one well-maintained library per concern, justify it in the handoff, pin through the lockfile, and run an audit.
+Implement:
 
-## API coordination contract
+- Email and password fields with accessible labels.
+- Password visibility control.
+- Submit and loading states.
+- Generic invalid-credentials message that does not reveal whether the email exists.
+- Rate-limited/locked, API-unavailable, and session-expired states.
+- Session restoration, logout, and protected-route redirect.
+- One fixture Workspace Admin account through the auth gateway; never hardcode a real password in production code.
+- PDF-directed sidebar/header with Candidates, Import, and Search as primary destinations.
 
-- Consume `/api/v1/**` only through a centralized HTTP layer.
-- Prefer a backend-published OpenAPI document and generated TypeScript client once available.
-- Until it is available, define narrow frontend ports and fixture adapters; do not guess response fields across many components.
-- Record every needed endpoint, request field, response field, enum, pagination/filter rule, idempotency need, and error state under `## Backend contract requests` in `docs/implementation/frontend-web-handoff.md`.
-- Do not silently change an agreed enum or workflow. Surface contract conflicts to the user/backend session.
-- Keep tenant/workspace identity derived from the authenticated session, never from an unrestricted arbitrary browser parameter.
+Do not implement sign-up, OAuth, TOTP, 2FA, password reset, invitations, or member administration. Do not display fake links for those flows.
 
-## Implementation order
+Reason: one real Admin login is sufficient to demonstrate authorization around import, compensation search, and export.
 
-Work in small test-driven checkpoints:
+## Checkpoint 2: Job selection and import wizard
 
-1. Refactor the existing shell into stable layout/navigation primitives without changing its verified appearance.
-2. Add router, route registry, error boundary, authenticated/unauthenticated layouts, and fixture feature gateways.
-3. Implement design tokens and shared accessible primitives used by the PDF screens.
-4. Implement auth/onboarding screens and route states against the fixture auth gateway.
-5. Complete Jobs and New Job wizard.
-6. Implement candidate pipeline and candidate profile.
-7. Implement Review inbox and bulk/import flows.
-8. Implement scheduling grid and calendar connection states.
-9. Implement offers and approval/preview states.
-10. Implement search, notifications, and reports.
-11. Replace fixture gateways with the generated API client feature by feature as backend contracts land.
-12. Add Playwright journeys only after stable routes exist; prioritize sign-in/onboarding/job/candidate/pipeline as the first vertical flow.
+Implement the complete route sequence:
 
-Commit each independently green checkpoint with a narrow message. Avoid one giant frontend commit.
+```text
+Select job
+  -> Upload/template
+  -> Map columns
+  -> Validate/preview
+  -> Confirm
+  -> Progress
+  -> Results
+```
 
-## Test-first and quality gates
+Required behavior:
 
-Before each behavior, write a focused failing test and confirm it fails for the expected reason. Then implement the minimum cohesive behavior and refactor while green.
+- Select one target job before upload.
+- Download the canonical application CSV template.
+- Upload a maximum 10 MB CSV with up to 2,000 rows.
+- Map arbitrary Google Form headers to canonical fields.
+- Require first name, last name, email, and public Drive resume URL mappings.
+- Explain current/expected CTC, `LPA`, currency, experience, notice period, and date normalization.
+- Prevent duplicate source/canonical mappings.
+- Preview valid, invalid, and duplicate rows with safe errors.
+- Confirm once using an idempotency key.
+- Preserve progress across refresh.
+- Display resume states: fetching, quarantined, scan pending, extracting, clean, failed.
+- Display row retry where the backend permits it.
+- Download the error CSV.
 
-Required coverage includes:
+Use typed fixture gateways until backend endpoints land. Keep fixtures outside presentation components.
 
-- Route and permission-state behavior
-- Keyboard navigation, focus management, dialogs, menus, and Cmd/Ctrl+K
-- Form validation and multi-step preservation
-- Loading/empty/error/retry states
-- Kanban keyboard-accessible movement plus pointer interaction
-- Bulk-selection safety and destructive confirmations
-- Offer approval/preview states
-- Calendar time-zone presentation states
-- Responsive shell and overflow behavior
-- Critical accessibility checks
-- Playwright happy path and one important denial/error path per stable vertical flow
+## Checkpoint 3: Candidate/application screens
 
-At every checkpoint run from the repository root:
+Implement:
+
+- Candidate/application list with job, stage, location, experience, current company/title, skills, expected/current CTC, notice period, application date, and resume status.
+- Basic candidate profile and selected application details.
+- Additional Google Form answers.
+- File status and authorized-download action only for clean files.
+- Admin/Recruiter compensation visibility; forbidden behavior must be testable even though the demo identity is Admin.
+- Loading, empty, error, forbidden, and retry states.
+
+Do not implement activity feeds, interviews, scorecards, offers, or calendar panels.
+
+## Checkpoint 4: Candidate CSV export
+
+Implement:
+
+- Create export from the current validated filters/sort.
+- Progress, completed, failed, expired, and retry states.
+- Authorized download action.
+- Clear statement that resumes and file URLs are excluded.
+- Seven-day artifact expiry display.
+- Admin/Recruiter-only compensation/export behavior.
+
+## Checkpoint 5: Dual search
+
+### Cmd+K
+
+- Candidate and job keyword search.
+- Navigation commands.
+- Keyboard opening, focus, arrows, enter, escape, and empty/error states.
+- Never call Grok for Cmd+K.
+
+### Natural-language candidate search
+
+- Search sentence input with examples such as `backend candidates in Pune with expected CTC below 40 LPA`.
+- Show interpreted keywords, warnings, sort, and editable/removable filter chips.
+- Explicit filters and sorting must work without Grok.
+- Support name, location, company/title, skills/resume text, experience, job/stage, source/date, CTC, notice period, and availability filters.
+- Show invalid interpretation, Grok disabled/unavailable/timeout, forbidden compensation, loading, empty, and retry states.
+- Offer the original sentence as standard keyword search after interpretation failure; never silently execute a changed query.
+- Store deterministic filters/sort in URL parameters; do not put the raw natural-language sentence in the URL.
+
+## API boundary
+
+- Use typed feature gateways for every remote operation.
+- Record exact endpoint/field/enum/error requests under `## Backend contract requests` in the frontend handoff.
+- Do not invent SQL, tenant IDs, security behavior, S3 keys, or provider responses.
+- Backend authorization is authoritative.
+- Access JWT stays in memory; refresh behavior is handled by the centralized auth/HTTP layer.
+- Never store candidate PII or tokens in local storage, logs, or fixtures committed to Git.
+
+## Visual direction
+
+- Preserve and refactor the existing PDF-directed shell rather than replacing it with a generic template.
+- Reuse the supplied typography, spacing, off-white canvas, white navigation surfaces, indigo actions, restrained borders, and information density.
+- Use real semantic controls, visible focus, reduced motion, responsive overflow, and keyboard alternatives.
+- Render and compare each completed priority route. Record visual-review status in the handoff.
+
+## Test-first order
+
+For each checkpoint:
+
+1. Write a focused failing Vitest/Testing Library test.
+2. Confirm it fails for the intended missing behavior.
+3. Implement the smallest cohesive feature.
+4. Run focused tests, then formatting, lint, all frontend tests, build, and audit.
+5. Update `docs/implementation/frontend-web-handoff.md`.
+6. Commit the green checkpoint with a narrow message.
+
+Required commands:
 
 ```powershell
 npm run format:check:web
@@ -172,26 +176,28 @@ npm run build:web
 npm audit --omit=dev
 ```
 
-Also run the relevant Playwright tests once configured. Do not claim visual fidelity without inspecting rendered pages against the corresponding PDF screens.
+Add Playwright only after stable routes exist. The first journey is:
 
-## Security and production constraints
+```text
+sign in
+  -> select job
+  -> upload/map/confirm CSV
+  -> inspect completed candidate/application
+  -> run Cmd+K
+  -> run natural-language CTC search
+  -> export filtered CSV
+```
 
-- Never commit secrets, tokens, real candidate data, or OAuth credentials.
-- Do not store access tokens in `localStorage` when an HttpOnly-cookie/session approach is available from the backend architecture.
-- Do not render untrusted resume/email/offer HTML without an explicit sanitization boundary.
-- Enforce file type/size feedback in the UI while treating backend validation as authoritative.
-- Avoid logging PII or API bodies containing candidate data.
-- Provide clear session-expired, forbidden, rate-limited, and upload-failure behavior.
-- Maintain WCAG-oriented semantics, labels, contrast, focus visibility, reduced motion, and keyboard paths.
+## Explicitly deferred
 
-## Coordination and completion
+- Sign-up, OAuth, TOTP, 2FA, invitations, and password reset.
+- Kanban editing and review inbox scoring.
+- Calendar, interviews, and scorecards.
+- Offers and approvals.
+- Reports and notifications.
+- AI resume scoring.
+- Authenticated Google Drive UI.
 
-- The backend session is progressing in parallel. Keep frontend commits isolated and report commit hashes plus backend contract requests to the user.
-- Rebase/merge only at an agreed checkpoint; do not modify the backend worktree to resolve conflicts.
-- A screen is not complete merely because it renders: its tests, responsive behavior, accessibility behavior, loading/error states, and implementation handoff must be current.
-- If an essential workflow is ambiguous after reviewing the PDF and architecture docs, ask one concise, implementation-impacting question; otherwise make a reversible UI assumption and record it.
-- End each checkpoint with: changed files, passing commands, screenshots/visual review status, mock-versus-real integration status, API requests, risks, and next recommended checkpoint.
-
-Begin by inspecting the baseline, creating `docs/implementation/frontend-web-handoff.md`, and proposing the first small shell/router checkpoint. Do not edit backend or infrastructure files.
+Begin with the sign-in/protected-shell failing tests. Keep the current 2/2 baseline tests green and update the frontend handoff before the first commit.
 
 ---
