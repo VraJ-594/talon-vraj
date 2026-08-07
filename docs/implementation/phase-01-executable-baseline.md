@@ -48,6 +48,13 @@ Establish a repeatable monorepo with an executable React/Vite frontend, Java 21 
 - Added Prettier and Spotless checks so AI-assisted changes share deterministic formatting conventions.
 - Remediated the npm advisory report by removing the unused vulnerable dependency path; the subsequent install reported zero vulnerabilities.
 
+### Parallel implementation boundary
+
+- Added `docs/prompts/frontend-parallel-session.md` as the copy-ready brief for a separate frontend session.
+- Assigned that session only `apps/web/**` and its frontend handoff, while this session retains API, migrations, Compose, and backend contract ownership.
+- Required an isolated `codex/frontend-web` worktree/branch from the verified baseline so parallel work cannot overwrite the backend worktree.
+- Defined fixture gateways as temporary typed adapters and reserved the real `/api/v1` and OpenAPI contracts for backend ownership, reducing integration churn.
+
 ## Why these choices
 
 - A single npm workspace and one Spring Boot artifact match the approved modular-monolith plan and minimize cross-project tooling.
