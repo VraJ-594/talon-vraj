@@ -13,5 +13,10 @@ public interface TokenIssuer {
   String hashRefreshToken(String rawRefreshToken);
 
   record AccessTokenClaims(
-      UUID userId, UUID workspaceId, WorkspaceRole role, Instant issuedAt, Instant expiresAt) {}
+      UUID userId,
+      UUID workspaceId,
+      WorkspaceRole role,
+      String displayName,
+      Instant issuedAt,
+      Instant expiresAt) {}
 }

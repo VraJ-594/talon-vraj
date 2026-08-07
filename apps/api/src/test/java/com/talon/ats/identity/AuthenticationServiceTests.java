@@ -63,6 +63,7 @@ class AuthenticationServiceTests {
     assertThat(tokenIssuer.claims.userId()).isEqualTo(uuid(1));
     assertThat(tokenIssuer.claims.workspaceId()).isEqualTo(uuid(2));
     assertThat(tokenIssuer.claims.role()).isEqualTo(WorkspaceRole.WORKSPACE_ADMIN);
+    assertThat(tokenIssuer.claims.displayName()).isEqualTo("Vraj");
   }
 
   @Test

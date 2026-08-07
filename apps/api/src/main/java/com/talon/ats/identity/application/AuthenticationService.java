@@ -65,6 +65,7 @@ public final class AuthenticationService {
             account.user().id(),
             account.membership().workspaceId(),
             account.membership().role(),
+            account.user().displayName(),
             issuedAt,
             accessExpiresAt);
     String accessToken = requiredToken(tokenIssuer.issueAccessToken(claims), "access token");

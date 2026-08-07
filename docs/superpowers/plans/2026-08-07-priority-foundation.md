@@ -101,11 +101,11 @@
 - Consumes: `AuthenticationService`, refresh session facade, signing secret/issuer/audience configuration.
 - Produces: `/api/v1/auth/login|refresh|logout` and `/api/v1/session`.
 
-- [ ] Add Spring Security starter, OAuth2 JOSE support, and security-test dependencies managed by Spring Boot.
-- [ ] Write MockMvc tests for public health/login, protected session, generic 401, refresh cookie flags, logout revocation, and Admin role claims.
-- [ ] Implement stateless bearer access validation and strict refresh-cookie handling.
-- [ ] Run controller tests and full Maven verification.
-- [ ] Update the handoff and commit `feat: expose basic authentication API`.
+- [x] Add Spring Security starter, OAuth2 JOSE support, and security-test dependencies managed by Spring Boot.
+- [ ] Write MockMvc tests for public health/login, protected session, generic 401, refresh cookie flags, logout revocation, and Admin role claims. Login/session/cookie/role cases pass; refresh rotation and logout await durable persistence.
+- [x] Implement stateless bearer access validation, BCrypt verification, signed access JWTs, opaque refresh generation/hash, and strict login refresh-cookie transport.
+- [x] Run focused controller/adapter/service tests (10 passed) and full Maven verification (23 passed).
+- [x] Update the handoff and commit the basic login/session HTTP checkpoint; durable refresh/logout wiring continues with Task 5.
 
 ### Task 5: Add PostgreSQL identity, job, candidate, and application schema
 

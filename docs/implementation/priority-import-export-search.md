@@ -6,8 +6,9 @@ Status: in progress.
 
 The approved active slice is minimal application-owned authentication followed by candidate CSV
 import/private export and dual-mode candidate search. The design and three executable plans are
-approved. The application-owned identity model and login/refresh-session creation contracts are
-implemented and verified. Spring Security/JWT HTTP adapters are next.
+approved. The application-owned identity model, login/session contracts, and Spring Security/JWT
+HTTP adapter checkpoint are implemented and verified. PostgreSQL persistence and production bean
+wiring are next.
 
 ## What changed
 
@@ -30,6 +31,14 @@ implemented and verified. Spring Security/JWT HTTP adapters are next.
 - Access and refresh defaults are supplied explicitly to the service; the verified contract uses
   15 minutes and seven days. A token provider that returns the raw refresh token as its stored hash
   is rejected.
+- Added Spring Security/resource-server dependencies, a BCrypt verifier, HS256 JWT issuer, opaque
+  256-bit refresh-token generation, keyed HMAC refresh hashing, login controller, secure refresh
+  cookie, protected session endpoint, and generic RFC 9457 invalid-credential response.
+- JWTs contain only user/workspace/role/display claims with issued/expiry times and require an
+  absolute URI issuer. Unknown/invalid bearer access is rejected with 401.
+- Security activation is explicit through `talon.security.enabled=true`. Until durable account/
+  session and decoder beans are wired, the default filter chain exposes health only and denies all
+  application routes; this avoids a fake in-memory production auth path.
 
 ## Why this approach
 
@@ -64,6 +73,8 @@ from becoming database instructions.
   authorization/error infrastructure.
 - Identity bootstrap domain/application files and `WorkspaceBootstrapServiceTests`.
 - Identity authentication application/domain files and `AuthenticationServiceTests`.
+- `apps/api/pom.xml`, identity `api` and `infrastructure/security` adapters,
+  `AuthControllerTests`, and `SecurityAdaptersTests`.
 
 ## Verification commands and observed results
 
@@ -83,11 +94,25 @@ from becoming database instructions.
 - Authentication focused green test — 4 tests passed.
 - Authentication full verification: `mvn ... spotless:apply verify` — build succeeded; 17 tests
   passed and Spotless reported all 32 Java files clean.
+- Initial auth HTTP red test — dependencies downloaded to `E:\maven-repo`, then compilation failed
+  because controller/security classes were intentionally absent.
+- Security condition red/diagnostic run — all auth routes returned 403 with no handler because
+  bean-order conditions selected the safe fallback; replaced them with explicit activation.
+- Adapter red runs identified the installed Nimbus encoder constructor, fixed-clock JWT expiry in
+  the test, and the need for an absolute URI issuer. The final focused suite passed 10/10.
+- Current full verification: `mvn ... spotless:apply verify` — build succeeded; 23 tests passed and
+  Spotless reported all 39 Java files clean.
+- Environment verification: Maven 3.9.11 uses Oracle Java 21.0.11 from
+  `C:\Program Files\Java\jdk-21.0.11`; direct Maven commands now work with the E-drive cache.
 - Docker-backed checks are blocked because Docker is not currently discoverable from this shell.
 
 ## Blockers, prerequisites, and exact next step
 
 - External prerequisites: runnable Docker engine/CLI, PostgreSQL/Supabase connection, AWS account,
   private S3/SQS resources, malware scanner choice, and an xAI key with usable billing.
-- Exact next step: add Spring Security dependencies and failing MockMvc tests for public health/
-  login, protected session, generic 401, secure refresh transport, logout, and role claims.
+- Supabase team action: create the project, retain the session-pooler host/port 5432/database/user,
+  enable PostgreSQL SSL enforcement, and keep the password out of Git/Slack. Do not create Talon
+  schema or policies manually; Flyway owns them.
+- Exact next step: write migration/persistence tests for identity, refresh sessions, jobs,
+  candidates, applications, tenant uniqueness/RLS, and compensation checks; then wire auth using
+  runtime-only secrets. Refresh rotation/logout endpoints remain pending durable session state.
