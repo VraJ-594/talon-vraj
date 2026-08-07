@@ -1,25 +1,44 @@
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import App from './App';
+import type { AuthGateway } from '../features/auth/authGateway';
+
+const authenticatedGateway: AuthGateway = {
+  login: async () => {
+    throw new Error('Login is not used for a restored session');
+  },
+  logout: async () => undefined,
+  restoreSession: async () => ({
+    userId: 'user-demo-admin',
+    displayName: 'Maya Reyes',
+    workspaceName: 'Talon Demo',
+    role: 'WORKSPACE_ADMIN',
+  }),
+};
 
 describe('Talon application shell', () => {
-  it('gives recruiters the primary Jobs workspace from the supplied design', () => {
-    render(<App />);
-
-    expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Jobs', level: 1 })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'New job' })).toHaveLength(2);
-    expect(screen.getByRole('searchbox', { name: 'Search candidates and jobs' })).toBeVisible();
+  beforeEach(() => {
+    window.history.replaceState({}, '', '/candidates');
   });
 
-  it('moves focus to global search when the command shortcut is pressed', async () => {
-    const user = userEvent.setup();
-    render(<App />);
+  it('gives administrators the three priority destinations', async () => {
+    render(<App authGateway={authenticatedGateway} />);
 
-    await user.keyboard('{Meta>}k{/Meta}');
+    expect(await screen.findByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Candidates' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Import applications' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Search' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Reports' })).not.toBeInTheDocument();
+  });
 
-    expect(screen.getByRole('searchbox', { name: 'Search candidates and jobs' })).toHaveFocus();
+  it('marks the current priority destination in the navigation', async () => {
+    render(<App authGateway={authenticatedGateway} />);
+
+    expect(await screen.findByRole('heading', { name: 'Candidates' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Candidates' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   });
 });

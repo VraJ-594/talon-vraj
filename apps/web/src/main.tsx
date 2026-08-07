@@ -2,6 +2,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import App from './app/App';
+import { AppErrorBoundary } from './app/AppErrorBoundary';
+import { createFixtureAuthGateway } from './features/auth/fixtureAuthGateway';
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -10,8 +12,12 @@ if (!root) {
   throw new Error('Talon root element was not found');
 }
 
+const authGateway = createFixtureAuthGateway();
+
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <AppErrorBoundary>
+      <App authGateway={authGateway} />
+    </AppErrorBoundary>
   </StrictMode>,
 );
