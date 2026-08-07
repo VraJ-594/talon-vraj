@@ -89,6 +89,17 @@ the latest run.
   normalization for email, dates, experience, notice period, and annual compensation.
 - Compensation normalization uses ISO currency minor units. `LPA` is accepted only with INR, and
   `40 LPA` becomes `400,000,000` paise without floating-point arithmetic.
+- Added an application-owned streaming CSV parser port and an Apache Commons CSV adapter for
+  RFC 4180 input. Parsing is bounded to 10 MB and 2,000 data rows, recognizes an optional UTF-8
+  BOM, rejects malformed or duplicate headers with stable error codes, and never fetches resumes
+  during preview.
+- Added header inspection with conservative canonical-field suggestions, explicit column mapping,
+  optional retention of unmapped Google Form answers, and row-numbered partial preview results.
+  Valid, invalid, and within-file duplicate rows are separated without aborting an otherwise
+  usable file.
+- Kept the parser behind `CsvApplicationParser`, so provider/library details do not leak into the
+  import domain. The durable upload/preview HTTP endpoints remain in Task 5 because their job ID,
+  mapping, preview, and retry behavior must be backed by PostgreSQL rather than an in-memory store.
 
 ## Why this approach
 
@@ -134,6 +145,8 @@ from becoming database instructions.
   modules.
 - Flyway `V3__job_import_target_location.sql`.
 - Import `domain` and `application` types plus `ImportMappingTests`.
+- Import CSV application contracts, `infrastructure/csv/CommonsCsvApplicationParser`, parser tests,
+  and the Apache Commons CSV dependency in `apps/api/pom.xml`.
 - `AuthControllerTests`, `SecurityAdaptersTests`, `AuthenticationRuntimeConfigurationTests`,
   `DemoAdminProvisionerTests`, `PrioritySchemaMigrationIT`, `SupabaseSchemaSmokeIT`, and
   `SupabaseIdentityPersistenceIT`.
@@ -211,6 +224,12 @@ from becoming database instructions.
   were absent. The focused green run passed 7/7 import and module-boundary tests.
 - Current network-free full verification after import Task 1: `mvn ... spotless:apply verify` —
   build succeeded; 42 tests passed and Spotless reported all 84 Java files clean.
+- CSV-parser red run failed at test compilation because the parser port, inspection/result models,
+  and Commons CSV adapter were absent. The focused green run passed 14/14 CSV, mapping, and module
+  boundary tests.
+- Current network-free full verification after import Task 2: `mvn ... spotless:apply verify` —
+  build succeeded; 49 tests passed, the executable JAR was produced, and Spotless reported all 92
+  Java files clean.
 
 ## Blockers, prerequisites, and exact next step
 
@@ -220,7 +239,8 @@ from becoming database instructions.
   never committed.
 - AWS account, private S3/SQS resources, malware scanner choice, and a funded xAI key remain future
   external prerequisites for the two priority features.
-- Exact next step: implement the bounded streaming CSV parser and mapping/preview API against the
-  completed import domain. When the pooler is reachable, run the saved database-only
-  `supabase-smoke` command to apply V3 and close the persistence gate before wiring live frontend
-  job/candidate HTTP gateways.
+- Exact next step: implement the anonymous public Google Drive PDF source behind
+  `ExternalFileSource`, including strict link/redirect validation, the 10 MB/PDF boundary, stable
+  transient/permanent failures, and the approved 5 starts/second, burst 5, maximum 5 in-flight
+  limiter. When the pooler is reachable, run the saved database-only `supabase-smoke` command to
+  apply V3 and close the persistence gate before wiring live frontend job/candidate HTTP gateways.

@@ -32,13 +32,13 @@
 
 ### Task 2: Streaming CSV validation and preview
 
-**Files:** Create `imports/application/CsvApplicationParser.java`, `imports/infrastructure/csv/**`, API DTO/controller tests, and parser fixtures containing synthetic data only.
+**Files:** Create `imports/application/CsvApplicationParser.java`, `imports/infrastructure/csv/**`, and parser fixtures containing synthetic data only. Wire the HTTP DTO/controller to the durable PostgreSQL import job in Task 5 so the API does not depend on a temporary in-memory upload store.
 
 **Interfaces:** Consumes a bounded stream and `ColumnMapping`; produces row-numbered normalized payload/errors without loading resume files.
 
-- [ ] Test BOM, quoting, malformed rows, unknown columns, UTF-8, file/row limits, formula-like content, duplicate candidate/application preview, and partial errors.
-- [ ] Implement bounded streaming parse and preview endpoints.
-- [ ] Verify heap-safe 2,000-row fixture, full tests, formatting, and commit `feat: add CSV import preview`.
+- [x] Test BOM, quoting, malformed rows, unknown columns, UTF-8, file/row limits, formula-like content, duplicate candidate/application preview, and partial errors.
+- [x] Implement the bounded streaming parse/inspection application boundary; defer only HTTP persistence/wiring to Task 5.
+- [x] Verify the bounded 2,000-row behavior, full tests, and formatting. Commit as `feat: add CSV import preview`.
 
 ### Task 3: Public Drive PDF source and leaky-bucket policy
 
