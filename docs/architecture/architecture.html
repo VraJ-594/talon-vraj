@@ -314,7 +314,7 @@
           <figure class="diagram">
             <figcaption class="diagram-head"><strong>AWS and provider topology</strong><code>eraser/system-architecture.eraserdiagram</code></figcaption>
             <div class="diagram-slot">
-              <div><b>Editable architecture source is ready</b><p>The diagram includes CloudFront/S3, Cognito, ALB/Fargate, external Supabase PostgreSQL, SQS, SES, security/observability, Google Calendar, Grok, and an optional Gemini fallback.</p><a class="source-link" href="./eraser/system-architecture.eraserdiagram">Open source</a></div>
+              <div><b>Priority architecture source is ready</b><p>The diagram covers app-owned authentication, CloudFront/private S3, ALB/Fargate, portable Supabase PostgreSQL, durable jobs/SQS, public Drive ingestion, private resume storage, and validated Grok query interpretation.</p><a class="source-link" href="./eraser/system-architecture.eraserdiagram">Open source</a></div>
             </div>
           </figure>
         </section>
@@ -332,14 +332,14 @@
             </figure>
             <figure class="diagram compact" data-export="assets/resume-scoring-sequence.svg">
               <figcaption class="diagram-head"><strong>Import and scoring</strong><code>eraser/resume-scoring-sequence.eraserdiagram</code></figcaption>
-              <div class="diagram-slot"><div><b>Sequence export slot</b><p>CSV/ZIP validation, durable creation, parsing, Grok-first provider routing, and ranked review.</p><a class="source-link" href="./eraser/resume-scoring-sequence.eraserdiagram">Open source</a></div></div>
+              <div class="diagram-slot"><div><b>Priority sequence source</b><p>CSV mapping, durable import, rate-limited Drive PDF handling, private S3, and validated natural-language search.</p><a class="source-link" href="./eraser/resume-scoring-sequence.eraserdiagram">Open source</a></div></div>
             </figure>
             <figure class="diagram compact" data-export="assets/scheduling-sequence.svg">
               <figcaption class="diagram-head"><strong>Scheduling</strong><code>eraser/scheduling-sequence.eraserdiagram</code></figcaption>
               <div class="diagram-slot"><div><b>Sequence export slot</b><p>Free/busy, hold, conflict recheck, event creation, and reconciliation.</p><a class="source-link" href="./eraser/scheduling-sequence.eraserdiagram">Open source</a></div></div>
             </figure>
             <figure class="diagram compact" data-export="assets/offer-approval-sequence.svg">
-              <figcaption class="diagram-head"><strong>Offer approval</strong><code>eraser/offer-approval-sequence.eraserdiagram</code></figcaption>
+              <figcaption class="diagram-head"><strong>Offer approval (deferred reference)</strong><code>eraser/offer-approval-sequence.eraserdiagram</code></figcaption>
               <div class="diagram-slot"><div><b>Sequence export slot</b><p>Version freeze, ordered decisions, PDF delivery, and SES status tracking.</p><a class="source-link" href="./eraser/offer-approval-sequence.eraserdiagram">Open source</a></div></div>
             </figure>
           </div>
@@ -371,7 +371,7 @@
           </header>
           <div class="flow">
             <article class="phase"><small>PHASE 01</small><h3>Vertical slice</h3><p>Identity, workspace, job, candidate, pipeline, DB, Playwright, Terraform plan.</p></article>
-            <article class="phase"><small>PHASE 02</small><h3>Intake and review</h3><p>CSV/ZIP, files, parsing, Grok-first signals, review queue.</p></article>
+            <article class="phase"><small>PHASE 02</small><h3>Candidate intake and search</h3><p>CSV/Drive import, private files/exports, Cmd+K, and validated Grok-to-DSL filters.</p></article>
             <article class="phase"><small>PHASE 03</small><h3>Evaluation</h3><p>Interviews, rubric snapshots, scorecards, visibility rules.</p></article>
             <article class="phase"><small>PHASE 04</small><h3>Coordination</h3><p>Google free/busy, holds, event lifecycle, reconciliation.</p></article>
             <article class="phase"><small>PHASE 05</small><h3>Closing</h3><p>Offer versions, approvals, PDF, SES delivery.</p></article>

@@ -1,164 +1,102 @@
-# Deployment and Testing Strategy
+# Priority Deployment and Testing Strategy
 
 ## 1. Delivery philosophy
 
-Develop locally, verify continuously, and deploy coherent vertical slices. Do not build a full continuous-deployment system before the first working product slice, but do not postpone all AWS integration until every feature is complete.
-
-The first milestone proves one path through browser, authentication, API, database, audit history, tests, Docker, and Terraform. Later increments reuse those boundaries.
+Develop and verify locally before AWS. Commit coherent green checkpoints; do not deploy on every
+commit. The first cloud deployment is manual and repeatable through Terraform and immutable
+artifacts. CI/CD automation follows only after the same priority journey is stable in AWS.
 
 ## 2. Local development
 
-Docker Compose provides PostgreSQL and a mail catcher. Frontend and backend may run on the host for fast reload or in containers for parity. Local provider interfaces use deterministic fakes for Cognito, xAI Grok, optional Gemini, Google Calendar, S3, SQS, and SES where a real sandbox would make tests slow or flaky.
-
-Real provider smoke tests run separately and never replace deterministic tests.
-
-The Grok consumer Free plan does not provide free production API usage. A real xAI smoke test requires an API team with usable prepaid credits or invoiced billing. Because xAI currently documents limitations with Indian payment cards, billing readiness is checked before the demo; otherwise `AI_PROVIDER=DISABLED` and the deterministic adapter keep the review workflow demonstrable.
-
-Expected developer commands after scaffolding:
-
 ```text
-docker compose up -d postgres mail
-./mvnw -f apps/api/pom.xml spring-boot:run
-npm --prefix apps/web run dev
-./mvnw -f apps/api/pom.xml test
-npm --prefix apps/web test
-npm --prefix apps/web run build
-npx playwright test
+Git working tree
+  -> React/Vite web
+  -> Spring Boot API + local worker
+  -> Docker PostgreSQL (and provider fakes)
+  -> unit/integration/Playwright verification
+  -> production Docker image build
 ```
+
+Docker data may remain on the E drive. Java 21 is required. Local providers include private-object,
+Drive, scanner, queue, clock, and Grok fakes with contract-compatible behavior. Real credentials
+belong in ignored local/runtime environment files.
 
 ## 3. Test layers
 
-### Backend unit tests
+- Domain/unit: identity, authorization, normalization, money/LPA, mapping, validation, state
+  transitions, idempotency, DSL allowlists.
+- Module: Spring Modulith dependency verification and application-service slice tests.
+- Database: Flyway on real PostgreSQL/Testcontainers, uniqueness/RLS, leasing/replay, query results
+  and plans. H2 is not a substitute.
+- Adapter contract: JWT/BCrypt, Drive URL/network/download cases, scanner, S3/private signing, local
+  dispatcher/SQS, PDFBox, Grok structured output.
+- Frontend: Vitest/Testing Library for forms, mapping, progress, chips, sorting, and states.
+- E2E: Playwright through public UI/API with deterministic provider fakes; small real-provider smoke
+  tests are separate and gated by credentials.
+- IaC: Terraform format/validate, lint, policy/security scans, and assertions for S3 public access,
+  encryption, IAM, queue/DLQ, secrets, logs, and parameterization.
 
-Test aggregates, policies, command handlers, permissions, state transitions, metric calculations, AI schema validation, time-zone logic, and retention decisions without network or database.
+Behavior changes start with a failing test. Completion claims require fresh observed verification.
 
-### Module architecture tests
+## 4. Priority Playwright journey
 
-Spring Modulith/ArchUnit verifies module visibility and dependency direction. Tests fail if one feature accesses another feature's repository or persistence entity directly.
+1. Existing Admin signs in and sees the shared shell.
+2. Select an existing job.
+3. Download template, upload Google Form CSV, map columns, inspect validation/duplicate preview.
+4. Confirm and observe durable progress, row errors, and completion.
+5. Open imported candidate/application and obtain an authorized resume download.
+6. Use Cmd+K keyword search without Grok.
+7. Interpret “candidates with expected CTC below 40 LPA,” inspect/edit chips, execute and sort.
+8. Request export, wait for completion, and download the private CSV.
 
-### Database integration tests
+Add focused negative flows for invalid auth, cross-workspace IDs, non-public/oversized/non-PDF
+resume, import retry, Grok invalid/unavailable output, and expired/unauthorized downloads.
 
-Testcontainers PostgreSQL runs Flyway migrations and repository/service tests. Coverage includes RLS, constraints, indexes, search, concurrency, outbox atomicity, reports, and migration from the previous schema.
+## 5. Initial vertical-slice gate
 
-### Adapter contract tests
+“First ten-hour vertical slice” means the thinnest complete path through UI, API, database, and
+tests that a reviewer can actually operate; it is not a promise to implement the whole ATS in ten
+hours. The current gate is:
 
-WireMock or provider sandboxes verify Cognito metadata/JWT expectations, xAI OpenAI-compatible structured-output handling, optional Gemini fallback handling, Google Calendar free/busy/events/webhooks, and SES delivery events. Provider fixtures are sanitized and committed.
+- executable web/API with migrations;
+- existing Admin login and workspace authorization;
+- minimal job selector;
+- one CSV preview/confirm/import through deterministic local provider fakes;
+- candidate list plus Cmd+K and one NL-to-DSL result;
+- one private export result;
+- the priority Playwright journey or its earliest complete subset;
+- Terraform validates even if AWS credentials are not yet available.
 
-### Frontend tests
+Blocked real-provider checks are recorded, never presented as passing.
 
-Vitest, Testing Library, and MSW verify routing, forms, keyboard behavior, accessibility, loading/empty/error states, role visibility, filters, drag alternatives, and conflict recovery.
+## 6. Performance and resilience targets
 
-### Playwright tests
+- Candidate list/search API p95 target under 500 ms for initial realistic data and bounded page.
+- Login p95 target under 750 ms excluding deliberate BCrypt cost variability.
+- Accept 10 MB/2,000-row CSV without loading resumes/whole artifacts into memory.
+- Drive limiter defaults to five starts/sec, capacity five, five in flight; honor `Retry-After`.
+- Search limits predicates/page size/query length; Grok has short connect/read timeout and bounded
+  retry only for safe transient errors.
+- A worker/API restart must not lose confirmed imports/exports or duplicate applications.
 
-Core browser flows run against deterministic local adapters. A smaller smoke project targets the AWS environment with dedicated test users and isolated workspace data.
+## 7. Manual AWS deployment
 
-### Infrastructure tests
+1. Verify local tests, migrations, web/API builds, Docker images, and Terraform static checks.
+2. Review target account/region, cost-bearing resources, names, and Terraform plan.
+3. Apply parameterized Terraform; no console-created dependency is treated as source of truth.
+4. Push immutable images/web artifact, run Flyway as a one-off task, then roll ECS services.
+5. Run health/auth/import/search/export smoke tests with private S3 and SQS.
+6. Capture commit/image digests, migration version, plan/apply output, URLs, and observed checks.
 
-Terraform formatting, validation, linting, policy/security scans, plan review, container scans, and post-deploy smoke checks are required.
+Rollback uses the previous immutable app image; database migrations remain forward-only and require
+expand/contract compatibility. Object and queue behavior is kept compatible during rollout.
 
-## 4. Playwright acceptance suite
+## 8. CI evolution and handoff
 
-1. Sign up, enroll TOTP, create workspace, invite staff, and enforce roles.
-2. Create a job through all wizard steps and publish it.
-3. Add a candidate and move the application through the Kanban with audit history.
-4. Detect an optimistic conflict between two browser sessions.
-5. Import CSV/ZIP, preview invalid/duplicate rows, confirm, and download errors.
-6. Show a resume assessment, use keyboard triage, and prove no automatic rejection.
-7. Create interviews, submit scorecards, and enforce peer visibility.
-8. Find availability, detect a conflict, hold a slot, and create/cancel a calendar event.
-9. Build an offer, upload PDF, complete ordered approvals, reset after edit, and send once.
-10. Search with Cmd+K, read notifications, and filter reports.
-11. Prove cross-workspace IDs and unauthorized compensation/file access fail.
-12. Purge an eligible candidate while preserving anonymized report totals and audit evidence.
+Future CI stages: formatting/static checks → unit/module/frontend → PostgreSQL/provider contracts →
+build/images → Terraform plan → ephemeral Playwright → manual production approval/deploy → smoke.
+Use GitHub OIDC rather than long-lived AWS keys.
 
-## 5. First approximately 10-hour vertical slice
-
-This is a milestone, not the full ATS. It must demonstrate:
-
-- Working frontend/backend/PostgreSQL baseline, with local PostgreSQL and the same Flyway migrations used against Supabase.
-- Authentication boundary and workspace onboarding.
-- Faithful shared Talon layout.
-- Job creation/publish.
-- Candidate creation/application.
-- One valid and one conflicting Kanban transition.
-- Persisted activity/audit history.
-- One Playwright happy path.
-- Docker builds and Terraform validate/plan.
-- AWS smoke deployment when account/OAuth inputs are available.
-
-No static placeholder screen counts as a completed workflow. The slice is valuable because later imports, review, scheduling, offers, and reporting attach to already-tested identities, tenants, APIs, migrations, deployment artifacts, and UI patterns.
-
-## 6. Performance targets
-
-- 25 concurrently active staff.
-- Import acceptance of 2,000 rows without holding an HTTP request open for processing.
-- Normal indexed read p95 under 500 ms at the target dataset.
-- Normal command p95 under 1 second, excluding asynchronous provider work.
-- Cmd+K first page under 500 ms for the target dataset.
-- No unbounded list, file read, archive extraction, or provider concurrency.
-
-Performance fixtures include multiple tenants, 100 jobs, tens of thousands of applications, stage history, interviews, messages, and a 2,000-row import. Report queries are verified with `EXPLAIN (ANALYZE, BUFFERS)` on representative data.
-
-## 7. Manual-first AWS deployment
-
-1. Produce clean frontend and backend builds from one commit.
-2. Build/tag/push Spring image using commit SHA.
-3. Upload immutable frontend assets to a release prefix.
-4. Run Terraform checks and review the target-account plan.
-5. Apply the platform stack manually, creating or importing the Supabase project as the reviewed plan specifies.
-6. Store the TLS session-pooler connection secret in Secrets Manager and run Flyway as an ECS one-off task.
-7. Deploy API/worker task definition using the immutable image.
-8. Publish frontend assets and switch/invalidate CloudFront.
-9. Run health, auth, data, queue, file, email, calendar, and AI smoke checks relevant to the release.
-10. Record deployed commit, Terraform state version, migration version, task definition, and smoke evidence.
-
-After this is repeatable, encode steps 2–10 in GitHub Actions using OIDC and protected environment approval.
-
-## 8. Deployment safety
-
-- Use rolling ECS deployment with ALB health gating.
-- Apply backward-compatible schema changes before code that requires them.
-- Run destructive schema contraction only after the previous code is no longer deployed.
-- Do not use mutable `latest` image tags for release identity.
-- Frontend assets are content hashed; HTML release switching is reversible.
-- Rollback reuses the previous task definition/frontend release only when schema compatibility permits.
-- Provider feature flags may disable a failing integration while preserving core candidate review.
-- Supabase Free is permitted only for development/demo. A production apply is blocked until the project uses a non-pausing tier with automated backups/PITR and the restore exercise has passed.
-
-## 9. CI stages
-
-Lightweight CI begins with the repository:
-
-1. Formatting and linting.
-2. Frontend typecheck/unit/build.
-3. Backend unit/module/integration/package.
-4. OpenAPI generation and breaking-change check.
-5. Docker build and vulnerability/SBOM scan.
-6. Terraform format/validate/lint/security checks.
-7. Playwright local core project.
-
-Deployment jobs are added only after manual cloud deployment is stable. Production apply/deploy requires protected environment approval.
-
-## 10. Test data and cleanup
-
-- Factories create tenant-scoped deterministic fixtures.
-- E2E creates a unique workspace per run and deletes or expires it through an administrative test cleanup path.
-- Provider sandboxes use dedicated calendars/senders/test recipients.
-- Logs and screenshots redact candidate contact data and tokens.
-- CI never uses production resumes or real candidate PII.
-
-## 11. Operational exercises before handoff
-
-- Restore the paid-tier Supabase backup to a separate project/database and compare expected data; on Free, exercise logical export/import only and label it non-production evidence.
-- Replay a DLQ message and prove idempotency.
-- Rotate xAI/optional Gemini/Google credentials and restart tasks safely.
-- Revoke a calendar connection and surface reconnect state.
-- Simulate SES bounce/complaint.
-- Set `AI_PROVIDER=DISABLED` and prove manual review remains available.
-- Scale worker from queue depth and observe recovery.
-- Execute candidate export/purge.
-- Review CloudWatch alarms and the incident escalation information supplied by the company.
-
-## 12. Release evidence
-
-A release record contains commit SHA, build/test summaries, OpenAPI version, Flyway version, Terraform plan/apply reference, image digest, frontend release identifier, security scan summaries, provider smoke results, known residual risks, and rollback instructions.
+Each implementation session updates `docs/implementation/priority-import-export-search.md` with
+scope/status, changes, rationale, important paths, files, commands/results, blockers, and exact
+next step. Test fixtures use synthetic people and safe PDFs; no candidate PII is committed.

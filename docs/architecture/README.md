@@ -17,9 +17,9 @@ This directory is the source of truth for the approved ATS design. Documents des
 
 - `eraser/system-architecture.eraserdiagram`
 - `eraser/domain-erd.eraserdiagram`
-- `eraser/resume-scoring-sequence.eraserdiagram`
-- `eraser/scheduling-sequence.eraserdiagram`
-- `eraser/offer-approval-sequence.eraserdiagram`
+- `eraser/resume-scoring-sequence.eraserdiagram` (legacy filename; now shows priority import/search)
+- `eraser/scheduling-sequence.eraserdiagram` (deferred reference)
+- `eraser/offer-approval-sequence.eraserdiagram` (deferred reference)
 
 Open `architecture.html` for a browser-friendly index. Each figure names the corresponding Eraser source and expected SVG export path.
 
@@ -28,11 +28,15 @@ Open `architecture.html` for a browser-friendly index. Each figure names the cor
 - React/Vite with strict TypeScript for the authenticated desktop SPA.
 - Java 21 Spring Boot modular monolith for API and worker profiles.
 - Supabase-hosted PostgreSQL with shared-schema multi-tenancy, application authorization, and RLS; Free for demo and a backed-up paid tier for production.
-- Outbox plus SQS for slow, retryable, or externally integrated work.
+- Durable PostgreSQL jobs/outbox plus a local dispatcher or SQS for retryable work.
 - AWS ECS Fargate as the initial container runtime.
-- Provider ports for AI, calendar, mail, identity, and object storage.
-- Grok is the preferred AI adapter when funded API access exists; Gemini is an optional fallback, and neither API is assumed permanently free.
-- One AWS environment in `ap-south-1`, with local Docker Compose development.
+- Application-owned basic authentication for the priority slice; advanced auth is deferred.
+- Provider ports for Drive resume source, private object storage, scanner, queue, and Grok query interpretation.
+- Deterministic Cmd+K plus validated Grok-to-DSL natural-language search; no AI resume scoring.
+- Parameterized AWS account and region, with local Docker Compose development.
+
+The active delivery order is intentionally limited to authentication, CSV/Drive/private-S3
+import/export, and candidate search. Later ATS workflows remain backlog, not active dependencies.
 
 ## Change discipline
 

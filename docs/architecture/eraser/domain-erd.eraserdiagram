@@ -3,155 +3,32 @@ colorMode pastel
 styleMode plain
 typeface clean
 
-workspace {
-  id uuid pk
-  name varchar
-  retention_months integer
-}
-
-app_user {
-  id uuid pk
-  cognito_subject varchar unique
-  email varchar
-}
-
-workspace_membership {
-  id uuid pk
-  workspace_id uuid fk
-  user_id uuid fk
-  role varchar
-}
-
-department {
-  id uuid pk
-  workspace_id uuid fk
-  name varchar
-}
-
-job {
-  id uuid pk
-  workspace_id uuid fk
-  department_id uuid fk
-  title varchar
-  status varchar
-  version bigint
-}
-
-job_stage {
-  id uuid pk
-  workspace_id uuid fk
-  job_id uuid fk
-  name varchar
-  position integer
-}
-
-candidate {
-  id uuid pk
-  workspace_id uuid fk
-  normalized_email varchar
-  first_name varchar
-  last_name varchar
-}
-
-application {
-  id uuid pk
-  workspace_id uuid fk
-  candidate_id uuid fk
-  job_id uuid fk
-  current_stage_id uuid fk
-  status varchar
-  outcome varchar
-  version bigint
-}
-
-stage_transition {
-  id uuid pk
-  workspace_id uuid fk
-  application_id uuid fk
-  from_stage_id uuid fk
-  to_stage_id uuid fk
-  occurred_at timestamptz
-}
-
-file_object {
-  id uuid pk
-  workspace_id uuid fk
-  candidate_id uuid fk
-  application_id uuid fk
-  storage_key varchar
-  scan_status varchar
-}
-
-ai_assessment {
-  id uuid pk
-  workspace_id uuid fk
-  application_id uuid fk
-  resume_file_id uuid fk
-  overall_score integer
-  status varchar
-}
-
-interview {
-  id uuid pk
-  workspace_id uuid fk
-  application_id uuid fk
-  status varchar
-  starts_at timestamptz
-}
-
-scorecard {
-  id uuid pk
-  workspace_id uuid fk
-  interview_id uuid fk
-  panelist_membership_id uuid fk
-  status varchar
-}
-
-offer {
-  id uuid pk
-  workspace_id uuid fk
-  application_id uuid fk
-  active_version_id uuid fk
-  status varchar
-}
-
-offer_version {
-  id uuid pk
-  workspace_id uuid fk
-  offer_id uuid fk
-  version_number integer
-  document_file_id uuid fk
-}
-
-offer_approval_step {
-  id uuid pk
-  workspace_id uuid fk
-  offer_version_id uuid fk
-  approver_membership_id uuid fk
-  position integer
-  status varchar
-}
+workspace { id uuid pk; name varchar; default_timezone varchar }
+app_user { id uuid pk; normalized_email varchar unique; password_hash varchar; status varchar }
+workspace_membership { id uuid pk; workspace_id uuid fk; user_id uuid fk; role varchar }
+refresh_session { id uuid pk; user_id uuid fk; workspace_id uuid fk; token_hash varchar unique; expires_at timestamptz }
+job { id uuid pk; workspace_id uuid fk; title varchar; status varchar }
+candidate { id uuid pk; workspace_id uuid fk; normalized_email varchar; first_name varchar; last_name varchar }
+application { id uuid pk; workspace_id uuid fk; candidate_id uuid fk; job_id uuid fk; expected_ctc_minor bigint; resume_file_id uuid fk }
+file_object { id uuid pk; workspace_id uuid fk; object_key varchar; scan_status varchar; storage_state varchar }
+import_job { id uuid pk; workspace_id uuid fk; job_id uuid fk; status varchar; mapping jsonb }
+import_row { id uuid pk; workspace_id uuid fk; import_job_id uuid fk; row_number integer; status varchar; application_id uuid fk }
+export_job { id uuid pk; workspace_id uuid fk; criteria jsonb; file_id uuid fk; expires_at timestamptz }
+resume_search_document { id uuid pk; workspace_id uuid fk; application_id uuid fk; file_id uuid fk; search_vector tsvector }
 
 workspace_membership.workspace_id > workspace.id
 workspace_membership.user_id > app_user.id
-department.workspace_id > workspace.id
+refresh_session.user_id > app_user.id
+refresh_session.workspace_id > workspace.id
 job.workspace_id > workspace.id
-job.department_id > department.id
-job_stage.job_id > job.id
 candidate.workspace_id > workspace.id
 application.candidate_id > candidate.id
 application.job_id > job.id
-application.current_stage_id > job_stage.id
-stage_transition.application_id > application.id
-file_object.candidate_id > candidate.id
-file_object.application_id > application.id
-ai_assessment.application_id > application.id
-ai_assessment.resume_file_id > file_object.id
-interview.application_id > application.id
-scorecard.interview_id > interview.id
-scorecard.panelist_membership_id > workspace_membership.id
-offer.application_id > application.id
-offer_version.offer_id > offer.id
-offer_version.document_file_id > file_object.id
-offer_approval_step.offer_version_id > offer_version.id
-offer_approval_step.approver_membership_id > workspace_membership.id
+application.resume_file_id > file_object.id
+file_object.workspace_id > workspace.id
+import_job.job_id > job.id
+import_row.import_job_id > import_job.id
+import_row.application_id > application.id
+export_job.file_id > file_object.id
+resume_search_document.application_id > application.id
+resume_search_document.file_id > file_object.id

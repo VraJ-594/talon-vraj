@@ -5,35 +5,28 @@ styleMode plain
 Recruiter [icon: user]
 Web [icon: react]
 API [icon: java]
-S3 [icon: aws-simple-storage-service]
-Supabase [icon: database, label: "Supabase PostgreSQL"]
-SQS [icon: aws-simple-queue-service]
+PostgreSQL [icon: database]
+Queue [icon: aws-simple-queue-service]
 Worker [icon: aws-fargate]
-AiRouter [label: "AI Provider Router"]
+Drive [icon: google-drive]
+PrivateStore [icon: aws-simple-storage-service, label: "Private S3"]
 Grok [label: "xAI Grok"]
-Gemini [icon: google-gemini, label: "Gemini fallback"]
 
-Recruiter > Web: Upload CSV and ZIP
-Web > API: Create import
-API > S3: Create presigned uploads
-API > Supabase: Save import job
-Web > S3: Upload bundle
-Web > API: Request validation
-API > SQS: Publish validation request
-SQS > Worker: Consume validation
-Worker > S3: Scan and parse bundle
-Worker > Supabase: Save preview rows
-Recruiter > Web: Confirm valid rows
-Web > API: Confirm with idempotency key
-API > Supabase: Create candidates applications and outbox
-API > SQS: Publish resume work
-SQS > Worker: Parse clean resume
-Worker > AiRouter: Send text and structured rubric
-AiRouter > Grok: Preferred when funded
-Grok > AiRouter: Structured assessment
-AiRouter --> Gemini: Optional configured fallback
-Gemini --> AiRouter: Structured assessment
-AiRouter > Worker: Validated internal assessment or unavailable
-Worker > Supabase: Save assessment/failure and activity
-Web > API: Poll review queue
-API > Web: Ranked evidence-bearing results
+Recruiter > Web: Select job and upload CSV
+Web > API: Map and preview columns
+API > PostgreSQL: Save durable job and rows
+Recruiter > Web: Confirm with idempotency key
+Web > API: Confirm import
+API > Queue: Dispatch opaque work IDs
+Queue > Worker: Claim durable row
+Worker > Drive: Rate-limited public PDF fetch
+Worker > PrivateStore: Quarantine, scan, promote
+Worker > PostgreSQL: Match candidate/create application
+Web > API: Poll progress/results
+Recruiter > Web: Enter natural-language search
+Web > API: Interpret query
+API > Grok: Query plus restricted DSL schema
+Grok > API: Candidate-free DSL JSON
+API > API: Validate fields/operators/values/sort
+API > PostgreSQL: Parameterized typed search
+API > Web: Editable chips and results

@@ -3,185 +3,150 @@
 ## 1. Repository layout
 
 ```text
-apps/
-  web/                         React/Vite TypeScript SPA
-  api/                         Spring Boot API and worker profiles
-infra/
-  terraform/                   bootstrap, modules, environments
-docs/
-  plans/                       delivery plans
-  architecture/                HLD, LLD, ADRs, diagrams, runbooks
+apps/web/                  React/Vite TypeScript SPA
+apps/api/                  Java 21 Spring Boot modular monolith
+  src/main/java/com/talon/ats/
+    identity/ jobs/ candidates/ imports/ files/ search/ shared/
+  src/main/resources/db/migration/
+infra/terraform/           account/region-parameterized AWS modules
+tests/e2e/                 Playwright priority journey
+docs/architecture/         decisions and contracts
+docs/implementation/       observed implementation handoffs
 ```
 
-The frontend and backend are separately deployable but versioned together. OpenAPI is generated from the backend and used to produce the frontend client during CI.
+Within a backend module use `domain`, `application`, `adapter/in/web`, and `adapter/out/*`.
+Application services depend on ports; provider and persistence adapters depend inward.
 
-## 2. Backend module structure
+## 2. Runtime profiles
 
-Use the root package `com.talon.ats`. Each top-level domain module owns its persistence and public application facade.
+### API
+
+- versioned REST under `/api/v1`;
+- JWT authentication and workspace/role principal;
+- commands, queries, previews, status polling, and signed-download authorization;
+- never performs Drive downloads, scans, PDF parsing, or full export generation inline.
+
+### Worker
+
+- same artifact and application handlers;
+- local profile claims PostgreSQL jobs through a bounded dispatcher;
+- AWS profile consumes SQS notifications and reclaims durable PostgreSQL state;
+- retries are idempotent and poison work reaches a DLQ/failed row with a safe error code.
+
+## 3. Core domain model
+
+- `AppUser`: normalized email, BCrypt password hash, status.
+- `WorkspaceMembership`: user, workspace, Admin/Recruiter role, status.
+- `RefreshSession`: user/workspace, hashed token, expiry/revocation/rotation metadata.
+- `Job`: workspace-owned import target.
+- `Candidate`: one person per normalized workspace email.
+- `Application`: one candidate application per selected job; typed form and compensation fields.
+- `FileObject`: private object metadata and quarantine/scan/promotion state.
+- `ImportJob` / `ImportRow`: durable aggregate and per-row outcome.
+- `ExportJob`: durable criteria snapshot and private artifact state.
+- `SearchCriteria`: text, allowlisted filters, allowlisted sort, cursor, limit.
+
+Money uses ISO currency plus signed 64-bit integer minor units. INR LPA parsing is explicit and
+overflow checked. Timestamps are UTC; display zones are IANA names.
+
+## 4. Authentication request path
+
+1. `POST /auth/login` normalizes email and applies per-IP/per-account rate limits.
+2. Account repository loads only by normalized email; BCrypt verifies password.
+3. Membership policy selects the authorized workspace and role.
+4. Token service issues a short access JWT and opaque random refresh token.
+5. Only a keyed hash of the refresh token is persisted.
+6. Refresh rotates atomically; reuse revokes the token family.
+7. A request filter verifies signature/issuer/audience/expiry and constructs `RequestPrincipal`.
+
+Public sign-up, OAuth, MFA, password reset, and invitations are not active routes.
+
+## 5. Import state and transactions
 
 ```text
-com.talon.ats.jobs
-  api/              controllers and transport DTOs
-  application/      commands, queries, authorization orchestration
-  domain/           aggregates, value objects, policies, domain events
-  infrastructure/   JPA repositories and adapter implementations
+UPLOADED -> MAPPED -> PREVIEWED -> QUEUED -> RUNNING -> COMPLETED
+                                            \-> COMPLETED_WITH_ERRORS
+                                            \-> FAILED
+
+row: PENDING -> DOWNLOADING -> QUARANTINED -> SCANNING -> IMPORTED
+                                             \-> REJECTED
+          any retryable worker state -> RETRY_PENDING -> prior operation
 ```
 
-Allowed dependency direction is `api -> application -> domain`. Infrastructure implements ports declared by application/domain. A module may call another module only through that module's public application facade or consume a published event. JPA entities and repository interfaces are not shared between modules. Spring Modulith's application-module verifier is mandatory; custom ArchUnit rules are added only for constraints not covered by that verifier.
+- Upload/mapping/preview is read-only with respect to candidates.
+- Confirm snapshots job, mapping, canonical values, and row validation using an idempotency key.
+- A worker row is claimed using locking/lease metadata.
+- Resume content reaches quarantine before the candidate/application transaction.
+- Only a clean promoted resume permits the candidate/application transaction.
+- Candidate match and application creation use database unique constraints for replay safety.
+- Safe row error codes/details are stored; raw resume content and secrets are not.
 
-## 3. Runtime profiles
+Application-owned ports:
 
-### API profile
-
-- Embedded HTTP server and OpenAPI.
-- Cognito resource-server validation.
-- Request principal and transaction-scoped tenant context.
-- Controllers, command/query handlers, outbox writes, and health endpoints.
-- No long-running provider calls in request threads.
-
-### Worker profile
-
-- SQS listeners and scheduled reconciliation.
-- Outbox dispatcher if not run as an API sidecar thread.
-- File scan/parse, AI provider routing, SES, Google Calendar, report maintenance, and retention consumers.
-- No public HTTP routes except health/metrics on an internal port.
-
-The same artifact enables both profiles, guaranteeing identical domain rules and event definitions.
-
-## 4. Request processing
-
-1. Correlation filter accepts or creates `X-Correlation-Id`.
-2. Spring Security validates issuer, signature, audience, expiry, and token use.
-3. Membership resolver loads the user/workspace/role and creates `RequestPrincipal`.
-4. Transaction interceptor executes `SET LOCAL app.workspace_id = :workspaceId` before tenant SQL.
-5. Controller validates transport shape and delegates to one command/query handler.
-6. Handler authorizes action and resource scope, invokes aggregate rules, persists state/history/outbox, and maps a response DTO.
-7. Exception mapper returns `application/problem+json` with stable error code and correlation ID.
-
-## 5. Domain state machines
-
-### Job
-
-```text
-DRAFT -> ACTIVE -> ON_HOLD -> ACTIVE
-ACTIVE|ON_HOLD -> CLOSED
+```java
+interface ResumeSource { FetchedResume fetch(ValidatedResumeReference reference); }
+interface ObjectStore { ObjectRef putQuarantine(...); ObjectRef promote(...); SignedGet signGet(...); }
+interface MalwareScanner { ScanResult scan(ObjectRef quarantineObject); }
+interface WorkDispatcher { void dispatch(WorkReference work); }
+interface NaturalLanguageQueryInterpreter { InterpretedDsl interpret(QueryText query, DslSchema schema); }
 ```
 
-Only drafts allow structural pipeline changes. Publishing requires role basics, at least two ordered stages, a recruiter/owner, and valid scorecard configuration. Closed jobs accept no new applications.
+The exact Java signatures evolve test first; provider DTOs never cross these boundaries.
 
-### Application
+## 6. Drive and file controls
 
-```text
-ACTIVE(stageId) -> ACTIVE(next or authorized stage)
-ACTIVE -> HIRED | REJECTED | WITHDRAWN
-```
+- Accept only `https` and allowlisted Google Drive hosts/link shapes.
+- Resolve and validate every redirect; reject loopback, link-local, private, reserved, and metadata
+  addresses, including DNS rebinding results.
+- Stream with timeouts and a hard 10 MB limit; require PDF media/signature and reject HTML.
+- Default limiter: five starts/second, burst five, and five in flight per worker.
+- Quarantine is not downloadable. Promotion requires `CLEAN` scan status.
+- Private keys use opaque IDs, for example `workspaces/{workspaceId}/candidates/{candidateId}/...`;
+  filenames/emails never appear in keys.
+- Presigned GET URLs expire in five minutes and are created only after authorization.
 
-Every transition records from/to stage, actor, reason, source operation, and effective timestamp. Terminal outcomes cannot be moved through ordinary transition APIs.
+## 7. Search contract
 
-### Interview and scorecard
+The canonical criteria supports:
 
-```text
-Interview: DRAFT -> SCHEDULED -> COMPLETED | CANCELLED
-Scorecard: DRAFT -> SUBMITTED -> REOPENED -> SUBMITTED
-```
+- text over name, email, skills/profile fields, application answers, and extracted resume text;
+- job, stage, source, application date, notice period, availability;
+- current/expected compensation with explicit currency and integer minor units;
+- allowlisted sorts such as relevance, name, application date, and expected compensation;
+- bounded limit and opaque cursor.
 
-Rubrics are snapshotted at interview creation. Peer scorecards are hidden from an interviewer until that interviewer has submitted.
+The versioned DSL is JSON, not SQL. Each predicate is `{field, operator, value}`; fields define
+allowed operators/types. Grok receives only query text, locale/time-zone context needed to parse it,
+and the schema. Validation returns normalized criteria plus display chips. Repository adapters use
+Criteria/JDBC parameters and workspace predicates; no model string becomes a SQL fragment.
 
-### Offer
+## 8. Frontend structure and behavior
 
-```text
-DRAFT -> PENDING_APPROVAL -> APPROVED -> SENT -> ACCEPTED | DECLINED | EXPIRED
-                    \-> REJECTED
-```
+Feature folders: `auth`, `shell`, `jobs`, `imports`, `candidates`, `search`, plus shared API,
+components, schemas, and test fixtures. TanStack Query owns server state; route/search params own
+reproducible filters; form state stays local.
 
-Material edits while pending/approved create a new version and return to `DRAFT`. Only the active ordered approver may approve/reject. Delivery is permitted once for an approved version unless the previous attempt conclusively failed before provider acceptance.
+Active UI: sign-in, sidebar/header, job selector, CSV template/upload, column mapping, validation
+preview, confirmation/progress/results, candidate list/profile, export, Cmd+K, and natural-language
+search with interpreted editable chips. All support loading, empty, permission, validation, and
+recoverable provider/error states and follow the supplied PDF visual system.
 
-## 6. Asynchronous events
+## 9. HTTP/error rules
 
-Event envelopes contain `eventId`, `eventType`, `schemaVersion`, `workspaceId`, `aggregateType`, `aggregateId`, `occurredAt`, `correlationId`, and a minimal payload. Candidate PII and resume text are referenced by authorized identifiers rather than copied into general queues.
+- UUID identifiers, JSON, UTC ISO-8601, cursor pagination.
+- `Idempotency-Key` on confirm/export and retryable commands.
+- RFC 9457 `application/problem+json` with stable machine code, correlation ID, safe field/row
+  errors, and no stack/provider leakage.
+- Optimistic version fields on mutable resources.
+- Bean Validation at the adapter edge and domain invariant checks inside application/domain code.
 
-Initial event types:
+## 10. Configuration and coding rules
 
-- `CandidateImportConfirmed.v1`
-- `ResumeStored.v1`
-- `ResumeParsingRequested.v1`
-- `ResumeAssessmentRequested.v1`
-- `ResumeAssessmentCompleted.v1`
-- `InterviewSchedulingRequested.v1`
-- `CalendarReconciliationRequested.v1`
-- `MessageDeliveryRequested.v1`
-- `OfferApprovalAdvanced.v1`
-- `CandidateRetentionDue.v1`
+Environment config includes database URL, token issuer/audience/key reference, token lifetimes,
+private bucket names, SQS URLs/local dispatcher mode, Drive allowlist/timeouts/limits, scanner,
+and `SEARCH_AI_PROVIDER=XAI_GROK|DISABLED` plus model/key secret. No secrets or account-specific
+ARNs are committed.
 
-Consumers insert `(consumer_name, event_id)` into `processed_message` before completing side effects or use a provider-specific idempotency key. Retries classify failures as transient, rate-limited, invalid/permanent, or security/quarantine failures.
-
-## 7. Frontend structure
-
-```text
-src/
-  app/               router, providers, auth bootstrap, layout
-  features/          jobs, pipeline, candidates, review, scheduling, offers, reports
-  components/        reusable Talon UI primitives
-  api/               generated client plus query adapters
-  lib/               formatting, validation, permissions, telemetry
-  styles/            design tokens and global rules
-```
-
-- TanStack Query owns server state and invalidation.
-- React Hook Form and Zod own form state and client validation; the server remains authoritative.
-- URL search parameters own filters/sorts where shareable.
-- Local component state owns dialog, selection, and transient drag state.
-- Avoid a global state library unless a concrete cross-route state requirement appears.
-
-## 8. UI behavior
-
-- Desktop minimum width is 1,280 px.
-- Sidebar remains fixed; wide Kanban and scheduling surfaces scroll horizontally.
-- Keyboard actions have visible labels and do not require drag-and-drop.
-- Every query surface defines loading, empty, error, stale, and unauthorized states.
-- Optimistic UI is limited to reversible commands such as notification read state. Pipeline moves wait for server confirmation or retain a rollback snapshot.
-- Forms preserve draft input across validation errors and prevent duplicate submission.
-
-## 9. Search and reporting
-
-Search uses normalized columns, PostgreSQL `tsvector`, and `pg_trgm` indexes. Search results are permission-filtered before ranking and return only display-safe fields.
-
-Reports query immutable history rather than mutable card counts. Expensive aggregates use bounded date windows and appropriate composite/partial indexes. Materialized views are introduced only if measured query plans exceed latency targets.
-
-## 10. Error contracts
-
-Problem responses contain:
-
-```json
-{
-  "type": "https://docs.talon.example/problems/optimistic-conflict",
-  "title": "The application changed",
-  "status": 409,
-  "code": "APPLICATION_VERSION_CONFLICT",
-  "detail": "Refresh the pipeline before retrying this move.",
-  "correlationId": "9e925cb7-7cbb-47fa-8fc6-6b519ff4a6a5",
-  "fieldErrors": []
-}
-```
-
-Stable error classes include validation, unauthenticated, forbidden, not found within tenant scope, optimistic conflict, idempotency conflict, provider unavailable, rate limited, unsafe file, and illegal state transition.
-
-## 11. Configuration
-
-Configuration enters through environment variables or Secrets Manager references. The application validates required variables at startup and fails before accepting traffic. Secrets never receive defaults. Non-secret defaults cover ports, page sizes, timeouts, retry counts, file limits, and feature flags.
-
-Feature flags are limited to integration enablement and safe rollout; they do not create long-lived alternate domain behavior.
-
-AI selection uses `AI_PROVIDER=XAI_GROK|GEMINI|DISABLED`. `XAI_API_KEY` and optional `GEMINI_API_KEY` are runtime secrets. The router prefers the explicitly configured provider, validates structured output into the same internal schema, records provider/model/prompt versions, and converts quota or availability failures into a retryable/manual-review state rather than a hiring decision.
-
-The deployed database URL targets the TLS Supabase Supavisor session pooler on port 5432. HikariCP connection limits are calculated from the database plan's connection allowance and the maximum API/worker task count. Local and Testcontainers profiles use ordinary PostgreSQL without Supabase-only code paths.
-
-## 12. Coding rules
-
-- Prefer immutable records/value objects at boundaries.
-- Keep controllers thin and transaction boundaries in application services.
-- Do not return JPA entities or accept them as API input.
-- Use database constraints for invariants that can be expressed relationally.
-- Avoid generic repositories/services that obscure domain intent.
-- Use explicit mapping code or small generated mappers; do not share transport DTOs with persistence.
-- Record actor and reason for every hiring decision or security-sensitive change.
+Use constructor injection, immutable commands/results, small interfaces, forward-only Flyway,
+workspace-required repositories, domain tests before behavior, adapter contract tests, and
+Spring Modulith boundary verification. Avoid generic repositories and speculative abstractions.

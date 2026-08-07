@@ -6,6 +6,9 @@
 - [0004: ECS Fargate](./0004-ecs-fargate.md)
 - [0005: External Provider Ports](./0005-external-provider-ports.md)
 - [0006: Supabase-Hosted PostgreSQL](./0006-supabase-hosted-postgresql.md)
+- [0007: Priority Slice and Application-Owned Authentication](./0007-priority-slice-and-application-auth.md)
+- [0008: Private Candidate File Transfer](./0008-private-candidate-file-transfer.md)
+- [0009: Validated Dual-Mode Candidate Search](./0009-validated-dual-mode-search.md)
 
 ADRs capture decisions whose reversal changes system boundaries, security posture, deployment topology, or team workflow.
 
@@ -16,5 +19,9 @@ ADRs capture decisions whose reversal changes system boundaries, security postur
 | [0003](./0003-shared-schema-multitenancy.md) | Shared-schema multi-tenancy | Accepted |
 | [0004](./0004-ecs-fargate.md) | ECS Fargate for initial AWS compute | Accepted |
 | [0005](./0005-external-provider-ports.md) | External provider ports | Accepted |
+| [0006](./0006-supabase-hosted-postgresql.md) | Portable PostgreSQL hosted by Supabase | Accepted |
+| [0007](./0007-priority-slice-and-application-auth.md) | Narrow the active slice and use application-owned authentication | Accepted |
+| [0008](./0008-private-candidate-file-transfer.md) | Public Drive ingestion into private object storage | Accepted |
+| [0009](./0009-validated-dual-mode-search.md) | Deterministic search plus validated Grok interpretation | Accepted |
 
 New ADRs use the next four-digit number and include Context, Decision, and Consequences. Accepted ADRs are not rewritten to hide a superseded decision; a new ADR supersedes the old record.

@@ -2,134 +2,135 @@
 
 ## 1. Purpose
 
-Talon is a multi-tenant, internal Applicant Tracking System for recruiting teams. It supports job creation, candidate intake, configurable hiring pipelines, review scoring, interviews, scorecards, calendar scheduling, offers, communication history, search, notifications, and recruiting reports.
+Talon ATS is a multi-tenant recruiting application. The current delivery slice provides secure
+candidate application intake from Google Form CSV data, private resume handling, export, and
+deterministic plus natural-language candidate search. The architecture retains clean module and
+provider seams for later ATS workflows without implementing them prematurely.
 
-The initial system targets approximately 50 concurrently active staff and imports of up to 2,000 candidates while retaining a path to horizontal growth. The architecture favors a small number of managed components, explicit module boundaries, reliable asynchronous processing, and low operational overhead.
+## 2. Active and deferred scope
 
-## 2. Scope boundaries
+Active:
 
-### Included
+- existing Admin/Recruiter application accounts and workspace authorization;
+- minimal jobs required to target an import;
+- candidates and one application per candidate/job;
+- CSV template, mapping, preview, durable import, progress, row errors, duplicates, and results;
+- required public Google Drive PDF ingestion into private object storage;
+- private candidate CSV export;
+- candidate/application list and basic profile;
+- Cmd+K keyword search, typed filters/sorting, and Grok-to-validated-DSL interpretation;
+- Terraform for portable AWS runtime and Playwright for the priority journey.
 
-- Workspace sign-up, invitations, Google federation, local credentials, and TOTP.
-- Fixed internal roles and tenant isolation.
-- Internal job postings grouped by department and a four-step creation wizard.
-- Candidate/application model and per-job Kanban pipeline.
-- Unified activity, emails, interviews, scorecards, and files.
-- CSV plus ZIP imports and audited bulk actions.
-- Automated resume parsing and Grok-backed job-fit assessment, with an optional Gemini fallback and manual-review mode.
-- Google Calendar free/busy and ATS-owned event synchronization.
-- Sequential offer approvals, PDF letter handling, and SES delivery.
-- Cmd+K search, in-app notifications, and specified hiring reports.
-- Terraform-managed AWS environment and Playwright acceptance tests.
-
-### Excluded
-
-- Public career site or public application form.
-- Candidate authentication or self-service portal.
-- Gmail mailbox ingestion and Microsoft Calendar.
-- Candidate e-signature and HRIS integration.
-- Custom permission builders, mobile redesign, Kafka, Kubernetes, Redis, and OpenSearch.
+Deferred: public sign-up, OAuth, 2FA, invitations, calendar, interviews, scorecards, offers,
+reports, notifications, editable Kanban, AI resume scoring, career pages, email sync, and mobile
+redesign.
 
 ## 3. System context
 
-Recruiters, hiring managers, interviewers, and workspace administrators use a React SPA delivered by CloudFront. Cognito authenticates staff. The SPA calls the Spring Boot REST API, which persists domain state in Supabase-hosted PostgreSQL and emits durable work through an outbox. An SQS worker processes imports, files, AI assessments, email, calendar reconciliation, report maintenance, and retention.
+```text
+Recruiter/Admin browser
+        |
+ CloudFront + private web origin
+        |
+       ALB
+        |
+ Spring Boot API / worker profiles
+    |          |             |
+PostgreSQL  private S3   SQS in AWS
+                           |
+               Google Drive public-source adapter
+                           |
+                 malware scanner / PDFBox
 
-External systems are isolated behind ports:
+Natural-language query -> Grok adapter -> validated DSL -> PostgreSQL
+Cmd+K/explicit filters -----------------> typed criteria -> PostgreSQL
+```
 
-- Cognito and Google Identity for authentication.
-- Google Calendar for scheduling.
-- xAI Grok for semantic resume assessment when a funded API key is configured; optional Gemini fallback.
-- Supabase for managed PostgreSQL, reached from ECS through TLS session pooling.
-- SES for outbound ATS messages.
-- S3 for private files and import bundles.
+Supabase may host PostgreSQL. Application code uses ordinary PostgreSQL, Flyway, JPA/JDBC, and a
+TLS connection string so another PostgreSQL host can replace it without changing domain behavior.
 
 ## 4. Logical components
 
-| Component | Responsibility | Scale model |
-|---|---|---|
-| React SPA | Routes, forms, Kanban, scheduling grid, dashboards, client cache | Static assets via CloudFront |
-| Spring API | Authentication context, authorization, commands, queries, OpenAPI | Stateless ECS tasks |
-| Spring Worker | SQS consumers, provider calls, retry/reconciliation jobs | Independently scalable ECS tasks |
-| Supabase PostgreSQL | Transactions, tenant data, RLS, audit history, search, report queries | Free demo tier; paid compute/backups before production |
-| SQS and DLQs | Durable work delivery and failure isolation | Queue depth-based scaling |
-| S3 | Resumes, ZIP imports, offer PDFs, exports | Native object scale |
-| Cognito | User pool, TOTP, Google federation, tokens | AWS-managed |
-| CloudWatch/CloudTrail | Logs, metrics, traces, alarms, platform audit | AWS-managed |
+| Component | Responsibility |
+|---|---|
+| Web SPA | Sign-in, shell, job selection, import wizard, candidate views, export, and search |
+| Identity | Password verification, JWT/refresh lifecycle, request principal, workspace roles |
+| Jobs | Minimal job read/create model required by import |
+| Candidates | Candidate identity, job applications, compensation/profile data |
+| Imports | CSV validation/mapping, durable jobs/rows, idempotent orchestration |
+| Files | Quarantine, scan state, PDF extraction, private-object authorization |
+| Search | Typed criteria, PostgreSQL query, DSL validation, Grok interpretation |
+| Worker | Claims durable work locally or consumes SQS using the same handlers |
+| Terraform | Parameterized AWS edge, compute, storage, messaging, secrets, and observability |
 
-## 5. Primary data flows
+Spring Modulith verifies module boundaries. External providers implement application-owned ports;
+domain/application packages do not import provider SDKs.
 
-### Transactional command
+## 5. Primary flows
 
-1. SPA sends a JWT-authenticated command with workspace context and optional idempotency/version headers.
-2. API verifies the Cognito JWT, resolves active membership, and authorizes the role and resource scope.
-3. One PostgreSQL transaction applies domain invariants, appends activity/audit history, and writes an outbox event.
-4. The API returns the committed representation and version.
-5. The outbox dispatcher publishes the event to SQS and marks the outbox record published.
+### Authentication
 
-### Bulk resume intake
+The API normalizes email, verifies its BCrypt hash, creates a workspace/role principal, returns a
+short-lived signed access JWT, and rotates a random refresh token whose hash is stored in
+PostgreSQL. Logout revokes the refresh session. Credentials and signing keys come from runtime
+secrets.
 
-1. Recruiter creates an import and uploads CSV/ZIP through presigned S3 URLs.
-2. Worker scans and parses the bundle, then writes a validation preview without creating candidates.
-3. Recruiter confirms the preview with an idempotency key.
-4. Confirmed rows create or match candidates and applications in bounded batches.
-5. Resume files are scanned, parsed, and assessed asynchronously; queue progress is visible in the UI.
+### Candidate import
 
-### Scheduling
+The user selects a job, uploads a CSV up to 10 MB/2,000 rows, maps arbitrary Form headings to a
+versioned canonical schema, and previews row validation. Confirmation writes a durable import job
+and row records. The worker rate-limits public Drive downloads, validates the network target and
+PDF, scans quarantine content, extracts searchable text, stores the clean PDF privately, and then
+creates/matches the workspace candidate and job application idempotently. A row can fail without
+losing successful rows.
 
-1. Recruiter records candidate availability and selects interviewers.
-2. API queries cached or live Google free/busy through `CalendarProvider`.
-3. A selected slot creates a short-lived hold.
-4. Worker/API rechecks conflicts immediately before creating ATS-owned Google events.
-5. Webhooks and reconciliation jobs update changes and surface failures.
+### Candidate export
 
-### Offer approval
+Authorized criteria create a durable export job. The worker streams a CSV into private storage;
+resume data/URLs are excluded. An authorized request creates a five-minute exact-object GET URL,
+and lifecycle policy removes the artifact after seven days.
 
-1. Recruiter drafts structured terms and uploads or generates an offer document.
-2. Submission freezes an offer version and activates the first approval step.
-3. Ordered approval commands advance one step at a time and notify the next approver.
-4. A material edit or document replacement creates a new version and resets approvals.
-5. Final approval permits one idempotent SES delivery; acceptance remains manually recorded.
+### Search
 
-## 6. Multi-tenancy
+Cmd+K and explicit filters build typed criteria directly. Natural-language mode gives Grok only
+the query and restricted DSL schema. The backend rejects unknown/invalid fields, operators,
+values, money semantics, and sort keys before mapping the accepted criteria to parameterized
+PostgreSQL queries. Provider failure never disables deterministic search.
 
-Tenant-owned records carry a non-null `workspace_id`. The request principal is resolved from Cognito subject plus active membership. Service methods require workspace-aware identifiers; repository queries include workspace scope; PostgreSQL RLS supplies defense in depth. Global identities never make candidate or job data global.
+## 6. Tenancy and authorization
 
-S3 keys follow `workspaces/{workspaceId}/{category}/{objectId}/{version}/{filename}`. Presigned access is produced only after resource authorization, is short-lived, and never permits prefix listing.
+- Every tenant-owned table includes immutable `workspace_id`.
+- Repositories require workspace criteria; PostgreSQL RLS is defense in depth.
+- Candidate email matching is unique on normalized email within a workspace.
+- Application uniqueness is workspace + job + candidate.
+- Admin and Recruiter can import, export, search, and see compensation/resume data.
+- File access rechecks workspace, role, scan status, and exact object ownership before signing.
 
-## 7. Reliability model
+## 7. Reliability and scale
 
-- API requests do not wait for imports, AI, email, or calendar reconciliation.
-- External calls use timeouts, bounded exponential backoff, circuit breaking, and idempotency.
-- Each consumer records processing keys so SQS redelivery is safe.
-- Poison events move to a named DLQ with operator-visible alarms and replay tooling.
-- Optimistic versions prevent silent overwrites of applications, jobs, and offers.
-- Immutable transition/activity/audit records allow metric reconstruction and incident review.
+- Transactional changes and job/outbox records commit together.
+- Import/export handlers are idempotent and retryable; rows expose explicit terminal states.
+- Local deployment uses a bounded in-process dispatcher. AWS uses SQS/DLQ through the same queue
+  port and handler contracts.
+- Drive starts default to five/second, capacity five, and five concurrent; `Retry-After` and
+  bounded exponential backoff are honored.
+- Stateless API/worker tasks scale horizontally. PostgreSQL remains the source of truth.
+- PostgreSQL full-text/trigram indexes are sufficient initially; OpenSearch, embeddings, Redis,
+  Kafka, Kubernetes, and microservices are not justified now.
 
-## 8. Scalability path
+## 8. Security and observability
 
-The initial scale does not justify cache or search clusters. PostgreSQL receives composite tenant indexes, full-text/trigram search, bounded pagination, and query-plan tests. API and worker scale independently on request utilization and queue age/depth. If growth later demands extraction, the outbox event contracts and module ports become service boundaries without changing the product model.
+S3 Block Public Access, disabled ACLs, encryption, opaque keys, least-privilege IAM, and private
+network paths protect candidate files. Logs contain correlation/workspace/job identifiers but not
+passwords, tokens, resume text, public Drive URLs, or candidate PII. Metrics cover auth failures,
+import row states, download throttling/retries, scan results, worker lag, search latency, Grok
+failures, and export expiry. Audit events cover sensitive commands and downloads.
 
-The database integration remains provider-portable: JDBC/JPA, Flyway, SQL, and PostgreSQL extensions only. Supabase Auth, Storage, Edge Functions, and generated Data APIs are intentionally excluded. The long-lived ECS services use Supavisor session mode over TLS; pool sizing is bounded across API and worker task counts.
+## 9. Quality attributes
 
-## 9. Observability
-
-All services emit structured JSON containing request/correlation ID, workspace ID, user ID where allowed, module, operation, outcome, latency, and error code. Resume content, email bodies, credentials, tokens, and candidate PII are excluded from logs.
-
-Required dashboards and alarms cover:
-
-- API availability, p95 latency, 4xx/5xx rates, and ECS health.
-- Database connections, pool saturation, CPU/storage signals available from Supabase, slow queries, and backup/restore status.
-- Queue depth, oldest-message age, retry count, and DLQ messages.
-- Import throughput and row failure rates.
-- AI/calendar/email provider latency and failure rates.
-- Authentication failures and authorization denials.
-
-## 10. Key quality attributes
-
-- **Security:** least privilege, tenant isolation, encryption, auditability, private files, and retention.
-- **Maintainability:** domain modules, generated clients, forward migrations, ADRs, and small vertical tasks.
-- **Availability:** stateless compute, durable queues, provider failure isolation, and recoverable database backups.
-- **Performance:** indexed tenant queries, asynchronous bulk work, cursor pagination, and explicit load targets.
-- **Explainability:** versioned AI rubrics/prompts and evidence-bearing assessments without automatic rejection.
-
-Grok's consumer Free plan is not an API entitlement. The production integration requires an xAI API team with usable credits or invoiced billing; provider cost and regional payment support are release prerequisites, not architecture assumptions.
+- Security by design: deny-by-default authorization and untrusted-file isolation.
+- Portability: PostgreSQL and provider ports avoid Supabase/AWS business-code coupling.
+- Maintainability: modules own behavior and data; HTTP/provider details remain adapters.
+- Testability: deterministic clocks/IDs/providers, migration integration tests, contract tests,
+  and one Playwright vertical flow.
+- Pragmatism: KISS/YAGNI keeps deferred ATS workflows out of the active implementation.

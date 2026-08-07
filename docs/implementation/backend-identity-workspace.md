@@ -7,6 +7,10 @@
 
 ## Scope
 
+Status: superseded in part by ADR 0007 and
+`docs/implementation/priority-import-export-search.md`. The domain rules below are historical
+evidence; Cognito, invitations, and advanced onboarding are not current implementation targets.
+
 Implement the backend identity/workspace module in test-driven checkpoints: first-user workspace bootstrap, fixed roles, invitations, request principal resolution, persistence, PostgreSQL tenant isolation, Cognito JWT validation, and versioned REST contracts.
 
 The frontend is owned by the separate `codex/frontend-web` workstream. This backend branch owns `/api/v1` contracts, Java modules, Flyway migrations, persistence adapters, and OpenAPI output.
