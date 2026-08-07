@@ -1,0 +1,7 @@
+dist/
+coverage/
+node_modules/
+target/
+tmp/
+docs/
+package-lock.json

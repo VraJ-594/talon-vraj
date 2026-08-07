@@ -1,0 +1,35 @@
+sequence-diagram
+typeface clean
+styleMode plain
+
+Recruiter [icon: user]
+Web [icon: react]
+API [icon: java]
+Supabase [icon: database, label: "Supabase PostgreSQL"]
+Approver [icon: users]
+S3 [icon: aws-simple-storage-service]
+Worker [icon: aws-fargate]
+SES [icon: aws-simple-email-service]
+Candidate [icon: user]
+
+Recruiter > Web: Enter terms and upload PDF
+Web > API: Save draft offer version
+API > S3: Store private approved scan target
+API > Supabase: Save terms document and approval steps
+Recruiter > Web: Submit for approval
+Web > API: Freeze active version
+API > Supabase: Activate first ordered step and notification
+Approver > Web: Approve current step
+Web > API: Approve with version
+API > Supabase: Audit decision and activate next step
+Approver > Web: Final approver approves
+Web > API: Final approval
+API > Supabase: Mark version approved
+Recruiter > Web: Deliver offer
+Web > API: Deliver with idempotency key
+API > Worker: Queue message
+Worker > S3: Read approved PDF
+Worker > SES: Send candidate email and attachment
+SES > Candidate: Deliver offer
+SES > Worker: Delivery or bounce event
+Worker > Supabase: Save message status and activity

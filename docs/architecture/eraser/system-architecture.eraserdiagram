@@ -1,0 +1,88 @@
+cloud-architecture-diagram
+direction right
+colorMode pastel
+styleMode plain
+typeface clean
+
+Users [icon: users, label: "Recruiters and Hiring Team"]
+GitHub [icon: github]
+
+AWS [icon: aws, color: orange] {
+  Edge {
+    CloudFront [icon: aws-cloudfront]
+    WebBucket [icon: aws-simple-storage-service, label: "React SPA"]
+  }
+
+  Identity {
+    Cognito [icon: aws-cognito]
+  }
+
+  VPC [icon: aws-vpc] {
+    Public {
+      ALB [icon: aws-elb-application-load-balancer]
+      NAT [icon: aws-vpc, label: "NAT Gateway"]
+    }
+
+    Private {
+      API [icon: aws-fargate, label: "Spring Boot API"]
+      Worker [icon: aws-fargate, label: "Spring Boot Worker"]
+    }
+  }
+
+  Async {
+    Queues [icon: aws-simple-queue-service, label: "SQS and DLQs"]
+    Scheduler [icon: aws-eventbridge]
+  }
+
+  Storage {
+    Files [icon: aws-simple-storage-service, label: "Resumes and Offers"]
+    Registry [icon: aws-elastic-container-registry]
+  }
+
+  Messaging {
+    SES [icon: aws-simple-email-service]
+  }
+
+  SecurityOps {
+    Secrets [icon: aws-secrets-manager]
+    KMS [icon: aws-key-management-service]
+    Observability [icon: aws-cloudwatch]
+    Audit [icon: aws-cloudtrail]
+  }
+}
+
+External {
+  Supabase [icon: database, label: "Supabase PostgreSQL\nFree demo / paid production"]
+  GoogleIdentity [icon: google, label: "Google OAuth"]
+  GoogleCalendar [icon: calendar, label: "Google Calendar"]
+  Grok [label: "xAI Grok API\npreferred when funded"]
+  Gemini [icon: google-gemini, label: "Gemini API\noptional fallback"]
+}
+
+Users > CloudFront
+CloudFront > WebBucket: Static assets
+CloudFront > ALB: /api/*
+ALB > API
+API > Cognito: Verify identity
+Cognito <> GoogleIdentity
+API <> Supabase: TLS session pooler
+API > Files: Presigned access
+API > Queues: Transactional outbox
+Queues > Worker: Async work
+Worker <> Supabase: TLS session pooler
+Worker <> Files
+Worker <> GoogleCalendar
+Worker > Grok: Resume assessment
+Worker --> Gemini: Optional fallback
+Worker > SES: Email
+Scheduler > Worker: Reconciliation and retention
+GitHub > Registry: Build images
+Registry > API, Worker
+API, Worker > Secrets, KMS
+API, Worker > Observability, Audit
+
+legend [position: bottom-left] {
+  [connection: >, label: Synchronous]
+  [connection: -->, label: Asynchronous]
+  [color: orange, label: AWS boundary]
+}

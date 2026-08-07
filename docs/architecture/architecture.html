@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>Talon ATS Architecture</title>
+  <style>
+    :root {
+      --talon-blue: #4f5bd5;
+      --talon-blue-soft: #eef0ff;
+      --ink: #18181d;
+      --slate: #62616d;
+      --paper: #f7f6f3;
+      --white: #ffffff;
+      --line: #ddd9d1;
+      --green: #24885b;
+      --amber: #b36b00;
+      --red: #bf3f42;
+      --shadow: 0 12px 35px rgba(35, 32, 52, 0.08);
+      --radius: 18px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      line-height: 1.55;
+    }
+
+    a { color: inherit; }
+    a:focus-visible { outline: 3px solid rgba(79, 91, 213, 0.4); outline-offset: 4px; }
+
+    .page {
+      display: grid;
+      grid-template-columns: minmax(230px, 280px) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .rail {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 34px 26px;
+      border-right: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.84);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 42px;
+      font-weight: 760;
+      letter-spacing: -0.03em;
+      font-size: 1.2rem;
+    }
+
+    .mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: var(--talon-blue);
+      color: white;
+      box-shadow: 0 8px 20px rgba(79, 91, 213, 0.24);
+    }
+
+    .nav-label {
+      color: var(--slate);
+      font-size: 0.7rem;
+      font-weight: 760;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin: 24px 0 10px;
+    }
+
+    nav a {
+      display: block;
+      padding: 9px 11px;
+      border-radius: 9px;
+      text-decoration: none;
+      color: #42414a;
+      font-size: 0.92rem;
+    }
+
+    nav a:hover { background: var(--talon-blue-soft); color: #303da9; }
+
+    .rail-note {
+      position: absolute;
+      left: 26px;
+      right: 26px;
+      bottom: 28px;
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+      color: var(--slate);
+      font-size: 0.78rem;
+    }
+
+    main { min-width: 0; }
+
+    .hero {
+      min-height: 420px;
+      padding: 68px clamp(34px, 6vw, 92px);
+      display: grid;
+      align-content: end;
+      position: relative;
+      overflow: hidden;
+      color: white;
+      background:
+        radial-gradient(circle at 75% 18%, rgba(118, 191, 238, 0.28), transparent 32%),
+        linear-gradient(135deg, #252b76 0%, #4f5bd5 62%, #6a54c7 100%);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: 0.18;
+      background-image: radial-gradient(circle, white 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: linear-gradient(to bottom, black, transparent 88%);
+    }
+
+    .hero > * { position: relative; z-index: 1; }
+    .eyebrow { font: 700 0.72rem/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: 0.16em; text-transform: uppercase; }
+    h1 { max-width: 900px; margin: 16px 0 14px; font-size: clamp(2.9rem, 7vw, 6.7rem); line-height: 0.92; letter-spacing: -0.075em; font-weight: 780; }
+    .hero p { max-width: 740px; margin: 0; font-size: clamp(1rem, 1.8vw, 1.35rem); color: rgba(255, 255, 255, 0.78); }
+
+    .content { padding: 58px clamp(28px, 6vw, 92px) 90px; }
+    section { scroll-margin-top: 28px; margin-bottom: 72px; }
+    section > header { max-width: 880px; margin-bottom: 26px; }
+    section h2 { margin: 8px 0; font-size: clamp(1.8rem, 3.2vw, 3rem); letter-spacing: -0.05em; }
+    section header p { color: var(--slate); max-width: 720px; }
+
+    .decision-strip {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
+      gap: 1px;
+      border: 1px solid var(--line);
+      background: var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .decision {
+      background: var(--white);
+      padding: 22px;
+      min-height: 150px;
+    }
+
+    .decision strong { display: block; margin-bottom: 12px; font-size: 1.02rem; }
+    .decision span { color: var(--slate); font-size: 0.86rem; }
+
+    .diagram {
+      border: 1px solid var(--line);
+      background: var(--white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .diagram-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfbfa;
+    }
+
+    .diagram-head strong { letter-spacing: -0.02em; }
+    .diagram-head code { color: var(--slate); font-size: 0.75rem; }
+    .diagram-slot {
+      min-height: 340px;
+      display: grid;
+      place-items: center;
+      padding: 42px;
+      background:
+        linear-gradient(var(--white), var(--white)) padding-box,
+        repeating-linear-gradient(135deg, transparent 0 8px, rgba(79, 91, 213, 0.035) 8px 16px);
+    }
+
+    .diagram-slot div { max-width: 600px; text-align: center; }
+    .diagram-slot b { display: block; font-size: 1.25rem; margin-bottom: 8px; }
+    .diagram-slot p { color: var(--slate); margin: 0 0 16px; }
+    .source-link { display: inline-block; color: var(--talon-blue); font-weight: 700; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+
+    .doc-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .diagram-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .diagram.compact .diagram-slot { min-height: 235px; padding: 28px; }
+    .diagram.compact .diagram-head { align-items: flex-start; flex-direction: column; gap: 4px; }
+
+    .doc-card {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      min-height: 150px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--white);
+      text-decoration: none;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    }
+
+    .doc-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: #b7b5d7; }
+    .doc-card h3 { margin: 0 0 8px; letter-spacing: -0.03em; }
+    .doc-card p { margin: 0; color: var(--slate); font-size: 0.88rem; }
+    .arrow { color: var(--talon-blue); font-size: 1.4rem; }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(130px, 1fr));
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .phase {
+      border-top: 4px solid var(--talon-blue);
+      padding: 18px;
+      background: white;
+      min-height: 170px;
+      border-radius: 6px 6px 14px 14px;
+      box-shadow: 0 8px 24px rgba(35, 32, 52, 0.06);
+    }
+
+    .phase small { color: var(--slate); font: 700 0.7rem ui-monospace, monospace; }
+    .phase h3 { margin: 12px 0 8px; font-size: 1rem; }
+    .phase p { color: var(--slate); font-size: 0.82rem; }
+    .phase:nth-child(4) { border-color: var(--green); }
+    .phase:nth-child(5) { border-color: var(--amber); }
+    .phase:nth-child(6) { border-color: var(--red); }
+
+    footer { padding: 28px clamp(28px, 6vw, 92px); border-top: 1px solid var(--line); color: var(--slate); font-size: 0.8rem; }
+
+    @media (max-width: 980px) {
+      .page { display: block; }
+      .rail { position: static; width: 100%; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+      .rail nav, .rail-note { display: none; }
+      .brand { margin: 0; }
+      .decision-strip { grid-template-columns: repeat(2, 1fr); }
+      .doc-grid, .diagram-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .doc-card { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <aside class="rail">
+      <div class="brand"><span class="mark">T</span> Talon architecture</div>
+      <nav aria-label="Architecture sections">
+        <div class="nav-label">System</div>
+        <a href="#decisions">Decisions</a>
+        <a href="#system">System architecture</a>
+        <a href="#domain">Domain model</a>
+        <div class="nav-label">Delivery</div>
+        <a href="#documents">Source documents</a>
+        <a href="#sequence">Implementation sequence</a>
+      </nav>
+      <div class="rail-note">Architecture baseline<br />Approved 7 August 2026</div>
+    </aside>
+
+    <main>
+      <header class="hero">
+        <div class="eyebrow">Production MVP / Decision record</div>
+        <h1>Hiring, connected end to end.</h1>
+        <p>A navigable engineering brief for the Talon ATS: tenant-safe data, reliable hiring workflows, replaceable integrations, and an AWS path sized for a fast first release.</p>
+      </header>
+
+      <div class="content">
+        <section id="decisions">
+          <header>
+            <div class="eyebrow">Architecture spine</div>
+            <h2>Five decisions hold the system together.</h2>
+            <p>These are deliberate constraints. They prevent the first release from turning into a distributed platform before the product workflows have earned that complexity.</p>
+          </header>
+          <div class="decision-strip">
+            <article class="decision"><strong>React/Vite</strong><span>Strict TypeScript SPA for the authenticated desktop product.</span></article>
+            <article class="decision"><strong>Spring Boot</strong><span>One modular Java backend with API and worker profiles.</span></article>
+            <article class="decision"><strong>Supabase PostgreSQL</strong><span>Free for demo; paid backups and non-pausing compute required for production.</span></article>
+            <article class="decision"><strong>SQS outbox</strong><span>Slow provider work remains durable and outside request threads.</span></article>
+            <article class="decision"><strong>ECS Fargate</strong><span>Standard containers without operating EC2 hosts or Kubernetes.</span></article>
+          </div>
+        </section>
+
+        <section id="system">
+          <header>
+            <div class="eyebrow">Diagram 01</div>
+            <h2>System architecture</h2>
+            <p>Export the editable Eraser source as <code>assets/system-architecture.svg</code> and replace this source slot with an image element when the export is available.</p>
+          </header>
+          <figure class="diagram">
+            <figcaption class="diagram-head"><strong>AWS and provider topology</strong><code>eraser/system-architecture.eraserdiagram</code></figcaption>
+            <div class="diagram-slot">
+              <div><b>Editable architecture source is ready</b><p>The diagram includes CloudFront/S3, Cognito, ALB/Fargate, external Supabase PostgreSQL, SQS, SES, security/observability, Google Calendar, Grok, and an optional Gemini fallback.</p><a class="source-link" href="./eraser/system-architecture.eraserdiagram">Open source</a></div>
+            </div>
+          </figure>
+        </section>
+
+        <section id="domain">
+          <header>
+            <div class="eyebrow">Diagram 02</div>
+            <h2>Domain and workflow diagrams</h2>
+            <p>The ERD protects person-versus-application semantics; the sequence diagrams make asynchronous provider and approval boundaries explicit.</p>
+          </header>
+          <div class="diagram-grid">
+            <figure class="diagram compact" data-export="assets/domain-erd.svg">
+              <figcaption class="diagram-head"><strong>Core domain ERD</strong><code>eraser/domain-erd.eraserdiagram</code></figcaption>
+              <div class="diagram-slot"><div><b>ERD export slot</b><p>Workspace, job, candidate/application, interview, scorecard, files, assessments, and offers.</p><a class="source-link" href="./eraser/domain-erd.eraserdiagram">Open source</a></div></div>
+            </figure>
+            <figure class="diagram compact" data-export="assets/resume-scoring-sequence.svg">
+              <figcaption class="diagram-head"><strong>Import and scoring</strong><code>eraser/resume-scoring-sequence.eraserdiagram</code></figcaption>
+              <div class="diagram-slot"><div><b>Sequence export slot</b><p>CSV/ZIP validation, durable creation, parsing, Grok-first provider routing, and ranked review.</p><a class="source-link" href="./eraser/resume-scoring-sequence.eraserdiagram">Open source</a></div></div>
+            </figure>
+            <figure class="diagram compact" data-export="assets/scheduling-sequence.svg">
+              <figcaption class="diagram-head"><strong>Scheduling</strong><code>eraser/scheduling-sequence.eraserdiagram</code></figcaption>
+              <div class="diagram-slot"><div><b>Sequence export slot</b><p>Free/busy, hold, conflict recheck, event creation, and reconciliation.</p><a class="source-link" href="./eraser/scheduling-sequence.eraserdiagram">Open source</a></div></div>
+            </figure>
+            <figure class="diagram compact" data-export="assets/offer-approval-sequence.svg">
+              <figcaption class="diagram-head"><strong>Offer approval</strong><code>eraser/offer-approval-sequence.eraserdiagram</code></figcaption>
+              <div class="diagram-slot"><div><b>Sequence export slot</b><p>Version freeze, ordered decisions, PDF delivery, and SES status tracking.</p><a class="source-link" href="./eraser/offer-approval-sequence.eraserdiagram">Open source</a></div></div>
+            </figure>
+          </div>
+        </section>
+
+        <section id="documents">
+          <header>
+            <div class="eyebrow">Source of truth</div>
+            <h2>Read from intent to operations.</h2>
+            <p>Each document owns one kind of decision, reducing duplicated guidance and making review changes traceable.</p>
+          </header>
+          <div class="doc-grid">
+            <a class="doc-card" href="./hld.md"><div><h3>High-Level Design</h3><p>Boundaries, components, flows, quality attributes, and scale.</p></div><span class="arrow">→</span></a>
+            <a class="doc-card" href="./lld.md"><div><h3>Low-Level Design</h3><p>Modules, state machines, events, frontend organization, and errors.</p></div><span class="arrow">→</span></a>
+            <a class="doc-card" href="./database-design.md"><div><h3>Database Design</h3><p>Tables, constraints, tenant policies, indexes, history, and retention.</p></div><span class="arrow">→</span></a>
+            <a class="doc-card" href="./api-design.md"><div><h3>API Design</h3><p>REST resources, commands, headers, contracts, and compatibility.</p></div><span class="arrow">→</span></a>
+            <a class="doc-card" href="./security-threat-model.md"><div><h3>Security Model</h3><p>Trust boundaries, threats, privacy, AI/file safety, and verification.</p></div><span class="arrow">→</span></a>
+            <a class="doc-card" href="./aws-terraform-design.md"><div><h3>AWS and Terraform</h3><p>Remote state, network, Fargate, external Supabase, edge, queues, and IAM.</p></div><span class="arrow">→</span></a>
+            <a class="doc-card" href="./deployment-and-testing.md"><div><h3>Deployment and Testing</h3><p>Local-first delivery, CI, Playwright, performance, and operations.</p></div><span class="arrow">→</span></a>
+            <a class="doc-card" href="../plans/talon-ats-implementation-plan.md"><div><h3>Implementation Plan</h3><p>Thirteen independently testable phases and the first vertical milestone.</p></div><span class="arrow">→</span></a>
+          </div>
+        </section>
+
+        <section id="sequence">
+          <header>
+            <div class="eyebrow">Delivery sequence</div>
+            <h2>Prove the spine, then add depth.</h2>
+            <p>The first vertical slice exercises every architectural layer. Subsequent phases add product capability without replacing the foundation.</p>
+          </header>
+          <div class="flow">
+            <article class="phase"><small>PHASE 01</small><h3>Vertical slice</h3><p>Identity, workspace, job, candidate, pipeline, DB, Playwright, Terraform plan.</p></article>
+            <article class="phase"><small>PHASE 02</small><h3>Intake and review</h3><p>CSV/ZIP, files, parsing, Grok-first signals, review queue.</p></article>
+            <article class="phase"><small>PHASE 03</small><h3>Evaluation</h3><p>Interviews, rubric snapshots, scorecards, visibility rules.</p></article>
+            <article class="phase"><small>PHASE 04</small><h3>Coordination</h3><p>Google free/busy, holds, event lifecycle, reconciliation.</p></article>
+            <article class="phase"><small>PHASE 05</small><h3>Closing</h3><p>Offer versions, approvals, PDF, SES delivery.</p></article>
+            <article class="phase"><small>PHASE 06</small><h3>Insight and hardening</h3><p>Search, notifications, reports, retention, performance, operations.</p></article>
+          </div>
+        </section>
+      </div>
+
+      <footer>All implementation changes that contradict this baseline require an Architecture Decision Record.</footer>
+    </main>
+  </div>
+</body>
+</html>

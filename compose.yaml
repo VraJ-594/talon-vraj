@@ -1,0 +1,36 @@
+name: talon-ats
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-talon}
+      POSTGRES_USER: ${POSTGRES_USER:-talon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-talon_local}
+    ports:
+      - "5432:5432"
+    volumes:
+      - talon-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  mail:
+    image: axllent/mailpit:v1.30.0
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+volumes:
+  talon-postgres-data:

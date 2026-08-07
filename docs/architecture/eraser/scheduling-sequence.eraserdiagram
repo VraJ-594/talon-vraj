@@ -1,0 +1,31 @@
+sequence-diagram
+typeface clean
+styleMode plain
+
+Recruiter [icon: user]
+Web [icon: react]
+API [icon: java]
+Supabase [icon: database, label: "Supabase PostgreSQL"]
+Google [icon: google-calendar]
+Worker [icon: aws-fargate]
+
+Recruiter > Web: Enter candidate availability and panel
+Web > API: Request free busy intersection
+API > Google: Query panel free busy
+Google > API: Busy intervals only
+API > Web: Available grid
+Recruiter > Web: Select slot
+Web > API: Create 24 hour hold
+API > Supabase: Save expiring hold
+Recruiter > Web: Send invites
+Web > API: Schedule interview
+API > Google: Recheck free busy
+Google > API: Current availability
+API > Supabase: Commit scheduled interview and outbox
+API > Worker: Queue event creation
+Worker > Google: Create ATS owned events
+Google > Worker: External event identifiers
+Worker > Supabase: Save identifiers and activity
+Google > Worker: Webhook change
+Worker > Google: Incremental reconciliation
+Worker > Supabase: Update status or conflict

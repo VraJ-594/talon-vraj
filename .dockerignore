@@ -1,0 +1,15 @@
+.git
+.worktrees
+.idea
+.vscode
+node_modules
+**/node_modules
+**/dist
+**/target
+coverage
+tmp
+.env
+.env.*
+*.log
+*.tfstate*
+.terraform
