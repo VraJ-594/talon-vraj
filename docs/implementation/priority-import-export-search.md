@@ -8,9 +8,10 @@ The approved active slice is minimal application-owned authentication followed b
 import/private export and dual-mode candidate search. The application-owned login/session HTTP
 contract, PostgreSQL schema, Supabase-hosted Flyway deployment, tenant-safe JDBC persistence,
 production JWT bean wiring, and idempotent environment-only demo Admin provisioner are implemented
-and verified. The ignored local file still needs real JWT keys and a demo BCrypt hash before the
-first live HTTP login smoke test. Refresh rotation/logout remain deferred with advanced auth; the
-active basic-auth demo path is login plus bearer-authenticated session.
+and verified. Independent local JWT/HMAC keys, a random demo password, and its BCrypt hash were
+generated without printing values; the live Supabase-backed login and bearer-session flow passed.
+Refresh rotation/logout remain deferred with advanced auth; the active basic-auth demo path is
+login plus bearer-authenticated session.
 
 ## What changed
 
@@ -56,6 +57,13 @@ active basic-auth demo path is login plus bearer-authenticated session.
   stays disabled by default; invalid or sub-256-bit keys fail startup.
 - Added an explicitly enabled, idempotent demo Admin provisioner. Email and BCrypt hash come only
   from runtime configuration; neither is committed or logged.
+- Generated local demo-only secrets into ignored `.env.supabase` and `.env.demo-credentials` files.
+  Two independent random 256-bit keys protect access-token signing and refresh-token hashing; the
+  random plaintext demo password exists only in the ignored credentials file and only its BCrypt
+  cost-12 hash enters application configuration/database storage.
+- AWS deployment will inject the same environment variable contract from Secrets Manager through
+  the Terraform-managed ECS task definition. Secrets are not baked into the image, committed in
+  `.tfvars`, or written into application Terraform resources.
 
 ## Why this approach
 
@@ -141,15 +149,19 @@ from becoming database instructions.
 - Current network-free full verification: `mvn ... spotless:apply verify` — build succeeded; 28
   tests passed and Spotless reported all 49 Java files clean. Docker and Supabase were not started
   or contacted by this default command.
+- Local secret shape/ignore verification — both keys decoded to at least 32 bytes, were distinct,
+  the demo hash matched the BCrypt format, both enable flags were true, both ignored files were
+  excluded by Git, and no values were printed.
+- Live API smoke against Supabase — Flyway reported schema version 2, Tomcat started on port 8080,
+  the idempotent provisioner created the demo workspace/Admin, `/actuator/health` returned `UP`,
+  `/api/v1/auth/login` succeeded, and the resulting bearer token resolved `/api/v1/session` with
+  `WORKSPACE_ADMIN` plus non-empty user/workspace IDs. Passwords and tokens were not printed.
 
 ## Blockers, prerequisites, and exact next step
 
-- Supabase is connected through its TLS session pooler and is at Flyway version 2. The local
-  `.env.supabase` is ignored and its values were never committed. Replace the newly added JWT key
-  and demo BCrypt placeholders locally, then enable `TALON_SECURITY_ENABLED` and
-  `TALON_DEMO_ADMIN_ENABLED` for the live smoke test.
+- Supabase is connected through its TLS session pooler and is at Flyway version 2. Local database,
+  JWT, refresh-HMAC, and demo-login values remain in ignored files and were never committed.
 - AWS account, private S3/SQS resources, malware scanner choice, and a funded xAI key remain future
   external prerequisites for the two priority features.
-- Exact next step: generate two independent 32-byte Base64 secrets plus one BCrypt demo-password
-  hash, run the API against Supabase, and verify login then `/api/v1/session`. After that gate, add
-  the minimal job/candidate/application query APIs required by CSV import and search.
+- Exact next step: add the minimal authenticated job and candidate/application query APIs required
+  by CSV import and deterministic/natural-language search, then begin the durable CSV import model.
