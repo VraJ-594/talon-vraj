@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 import App from '../../app/App';
 import type { AuthenticatedSession, AuthProblemCode } from './authGateway';
+import { createFixtureImportGateway } from '../imports/fixtureImportGateway';
+import { createFixtureJobGateway } from '../jobs/fixtureJobGateway';
 import { SignInPage } from './SignInPage';
 
 describe('authentication routing', () => {
@@ -55,6 +57,39 @@ describe('authentication routing', () => {
 
     expect(await screen.findByRole('heading', { name: 'Import applications' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/imports');
+  });
+
+  it('preserves a validated opaque import ID while requiring sign in', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState({}, '', '/imports?importId=fixture-import-001');
+
+    render(
+      <App
+        authGateway={{
+          login: async () => ({
+            userId: 'user-demo-admin',
+            displayName: 'Maya Reyes',
+            workspaceName: 'Talon Demo',
+            role: 'WORKSPACE_ADMIN',
+          }),
+          logout: async () => undefined,
+          restoreSession: async () => null,
+        }}
+        importGateway={createFixtureImportGateway()}
+        jobGateway={createFixtureJobGateway()}
+      />,
+    );
+
+    await user.type(
+      await screen.findByRole('textbox', { name: 'Work email' }),
+      'admin@example.test',
+    );
+    await user.type(screen.getByLabelText('Password'), 'temporary-input');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(await screen.findByRole('heading', { name: 'Import results' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/imports');
+    expect(window.location.search).toBe('?importId=fixture-import-001');
   });
 
   it('restores an authenticated session into the requested protected route', async () => {

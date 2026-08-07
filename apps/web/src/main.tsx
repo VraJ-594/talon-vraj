@@ -4,6 +4,8 @@ import { createRoot } from 'react-dom/client';
 import App from './app/App';
 import { AppErrorBoundary } from './app/AppErrorBoundary';
 import { createFixtureAuthGateway } from './features/auth/fixtureAuthGateway';
+import { createFixtureJobGateway } from './features/jobs/fixtureJobGateway';
+import { createFixtureImportGateway } from './features/imports/fixtureImportGateway';
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -13,11 +15,13 @@ if (!root) {
 }
 
 const authGateway = createFixtureAuthGateway();
+const jobGateway = createFixtureJobGateway();
+const importGateway = createFixtureImportGateway();
 
 createRoot(root).render(
   <StrictMode>
     <AppErrorBoundary>
-      <App authGateway={authGateway} />
+      <App authGateway={authGateway} importGateway={importGateway} jobGateway={jobGateway} />
     </AppErrorBoundary>
   </StrictMode>,
 );

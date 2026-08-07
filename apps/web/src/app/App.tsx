@@ -8,6 +8,9 @@ import {
   type AuthGateway,
 } from '../features/auth/authGateway';
 import { SignInPage } from '../features/auth/SignInPage';
+import { ImportWizard } from '../features/imports/ImportWizard';
+import { isOpaqueImportId, type ImportGateway } from '../features/imports/importGateway';
+import type { JobGateway } from '../features/jobs/jobGateway';
 
 type PriorityRoute = {
   readonly path: '/candidates' | '/imports' | '/search';
@@ -45,8 +48,23 @@ function isPriorityRoutePath(path: string): path is PriorityRoute['path'] {
   return priorityRoutes.some((route) => route.path === path);
 }
 
+function requestedLocation(path: string): PriorityRoute['path'] | `/imports?importId=${string}` {
+  if (!isPriorityRoutePath(path)) {
+    return '/candidates';
+  }
+  if (path === '/imports') {
+    const importId = new URLSearchParams(window.location.search).get('importId');
+    if (isOpaqueImportId(importId)) {
+      return `/imports?importId=${encodeURIComponent(importId)}`;
+    }
+  }
+  return path;
+}
+
 type AppProps = {
   readonly authGateway?: AuthGateway;
+  readonly importGateway?: ImportGateway;
+  readonly jobGateway?: JobGateway;
 };
 
 const unconfiguredAuthGateway: AuthGateway = {
@@ -58,6 +76,33 @@ const unconfiguredAuthGateway: AuthGateway = {
   },
   async logout() {
     return undefined;
+  },
+};
+
+const unconfiguredJobGateway: JobGateway = {
+  async listImportTargets() {
+    throw new Error('Job gateway is not configured');
+  },
+};
+
+const unconfiguredImportGateway: ImportGateway = {
+  async uploadCsv() {
+    throw new Error('Import gateway is not configured');
+  },
+  async validate() {
+    throw new Error('Import gateway is not configured');
+  },
+  async confirm() {
+    throw new Error('Import gateway is not configured');
+  },
+  async getImport() {
+    throw new Error('Import gateway is not configured');
+  },
+  async retryRow() {
+    throw new Error('Import gateway is not configured');
+  },
+  async downloadErrors() {
+    throw new Error('Import gateway is not configured');
   },
 };
 
@@ -137,10 +182,14 @@ function Sidebar({
 }
 
 function ProtectedWorkspace({
+  importGateway,
+  jobGateway,
   loggingOut,
   onLogout,
   session,
 }: {
+  readonly importGateway: ImportGateway;
+  readonly jobGateway: JobGateway;
   readonly loggingOut: boolean;
   readonly onLogout: () => Promise<void>;
   readonly session: AuthenticatedSession;
@@ -179,20 +228,26 @@ function ProtectedWorkspace({
               <h1>{route.pageTitle}</h1>
             </div>
           </div>
-          <section className="priority-placeholder" aria-label={`${route.pageTitle} foundation`}>
-            <p>{route.description}</p>
-          </section>
+          {route.path === '/imports' ? (
+            <ImportWizard importGateway={importGateway} jobGateway={jobGateway} />
+          ) : (
+            <section className="priority-placeholder" aria-label={`${route.pageTitle} foundation`}>
+              <p>{route.description}</p>
+            </section>
+          )}
         </main>
       </div>
     </div>
   );
 }
 
-export default function App({ authGateway = unconfiguredAuthGateway }: AppProps) {
+export default function App({
+  authGateway = unconfiguredAuthGateway,
+  importGateway = unconfiguredImportGateway,
+  jobGateway = unconfiguredJobGateway,
+}: AppProps) {
   const [currentPath, navigate] = useLocation();
-  const requestedRoute = useRef<PriorityRoute['path']>(
-    isPriorityRoutePath(currentPath) ? currentPath : '/candidates',
-  );
+  const requestedRoute = useRef(requestedLocation(currentPath));
   const [loggingOut, setLoggingOut] = useState(false);
   const [session, setSession] = useState<AuthenticatedSession | null | undefined>(undefined);
   const [sessionMessage, setSessionMessage] = useState<string | null>(null);
@@ -248,6 +303,8 @@ export default function App({ authGateway = unconfiguredAuthGateway }: AppProps)
 
   return (
     <ProtectedWorkspace
+      importGateway={importGateway}
+      jobGateway={jobGateway}
       loggingOut={loggingOut}
       onLogout={async () => {
         setLoggingOut(true);
