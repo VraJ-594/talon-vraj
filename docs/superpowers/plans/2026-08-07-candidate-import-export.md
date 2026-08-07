@@ -57,6 +57,7 @@
 **Interfaces:** Produces opaque quarantine/clean objects, five-minute authorized downloads, `FileScanStatus`, and bounded resume search text.
 
 - [x] Implement and verify opaque object keys plus a bounded, integrity-reporting local storage adapter with quarantine-to-clean promotion.
+- [x] Implement and verify fail-closed scan/promote/extract orchestration and clean-only workspace download policy.
 - [ ] Test private keys, no PII, no quarantine download, clean-only authorization, signature age, scanner fail-closed, 50-page/500k-character/10-second extraction bounds, and seven-day lifecycle categories.
 - [ ] Implement local adapter first, then S3/SQS adapters behind identical contracts.
 - [ ] Verify S3 public-access Terraform assertions, tests, and commit `feat: add private candidate file storage`.

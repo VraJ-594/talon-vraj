@@ -123,6 +123,13 @@ the latest run.
 - Local writes stream through a hard caller-supplied limit into a same-directory temporary object,
   calculate SHA-256, and atomically publish the completed object. Limit/I/O failures remove the
   temporary file. Promotion only accepts a quarantine resume and its exact derived clean key.
+- Added application-owned scanner and resume-text-extractor ports plus fail-closed processing
+  orchestration. Only a `CLEAN` verdict triggers promotion and extraction; infected files and
+  scanner failures remain in quarantine. Extraction output is structurally capped at 50 processed
+  pages and 500,000 characters, with an explicit truncation marker for the concrete adapter.
+- Added the backend clean-download policy boundary. Cross-workspace access resolves as not found,
+  while quarantine or non-clean objects are not downloadable. Actual role/resource lookup and
+  five-minute local/S3 delivery grants remain controller/persistence adapter work.
 
 ## Why this approach
 
@@ -173,6 +180,7 @@ from becoming database instructions.
 - File-source application contracts and `files/infrastructure/drive` HTTP adapter.
 - Generic `platform/ratelimit` contract, `LeakyBucket`, named Modulith interface, and focused tests.
 - `files/application` private-object contracts and `files/infrastructure/storage/LocalObjectStorage`.
+- File scan/extraction ports, `CandidateFileProcessingService`, and processing/download-policy tests.
 - `AuthControllerTests`, `SecurityAdaptersTests`, `AuthenticationRuntimeConfigurationTests`,
   `DemoAdminProvisionerTests`, `PrioritySchemaMigrationIT`, `SupabaseSchemaSmokeIT`, and
   `SupabaseIdentityPersistenceIT`.
@@ -273,6 +281,12 @@ from becoming database instructions.
 - Current network-free full verification after the Task 4 local-storage checkpoint:
   `mvn ... spotless:apply verify` — build succeeded; 65 tests passed, the executable JAR was
   produced, and Spotless reported all 115 Java files clean.
+- Scan-processing red run failed at test compilation because the processing service, verdict,
+  scanner/extractor ports, bounded result, and stable processing exception were absent. The focused
+  service/storage/architecture run passed 8/8 after implementing the fail-closed boundary.
+- Current network-free full verification after the Task 4 processing-policy checkpoint:
+  `mvn ... spotless:apply verify` — build succeeded; 68 tests passed, the executable JAR was
+  produced, and Spotless reported all 122 Java files clean.
 
 ## Blockers, prerequisites, and exact next step
 
@@ -282,8 +296,8 @@ from becoming database instructions.
   never committed.
 - AWS account, private S3/SQS resources, malware scanner choice, a funded xAI key, and one synthetic
   anonymously downloadable Drive PDF for a live provider smoke remain future external prerequisites.
-- Exact next step: add the fail-closed scanner and bounded PDF text-extraction ports/adapters, plus
-  clean-only download authorization. Then implement the S3 adapter and Terraform public-access
-  assertions behind the completed `ObjectStorage` port. When the pooler is reachable, run the saved
-  database-only `supabase-smoke` command to apply V3 and close the persistence gate before wiring
-  live frontend job/candidate HTTP gateways.
+- Exact next step: implement contract-tested ClamAV-compatible scanning and bounded PDFBox text
+  extraction (50 pages, 500,000 characters, ten seconds, two concurrent), then add five-minute
+  download grants. After that, implement the S3 adapter and Terraform public-access assertions
+  behind the completed `ObjectStorage` port. When the pooler is reachable, run the saved
+  database-only `supabase-smoke` command to apply V3 and close the persistence gate.

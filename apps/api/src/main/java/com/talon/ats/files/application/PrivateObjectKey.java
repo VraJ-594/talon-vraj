@@ -76,6 +76,10 @@ public final class PrivateObjectKey {
     return category == Category.QUARANTINE_RESUME;
   }
 
+  public boolean isCleanResume() {
+    return category == Category.CLEAN_RESUME;
+  }
+
   public PrivateObjectKey cleanResumeKey() {
     if (!isQuarantineResume()) {
       throw new IllegalStateException("only quarantine resumes have a clean destination");
