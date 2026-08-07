@@ -5,10 +5,12 @@
 Status: in progress.
 
 The approved active slice is minimal application-owned authentication followed by candidate CSV
-import/private export and dual-mode candidate search. The design and three executable plans are
-approved. The application-owned identity model, login/session contracts, and Spring Security/JWT
-HTTP adapter checkpoint are implemented and verified. PostgreSQL persistence and production bean
-wiring are next.
+import/private export and dual-mode candidate search. The application-owned login/session HTTP
+contract, PostgreSQL schema, Supabase-hosted Flyway deployment, tenant-safe JDBC persistence,
+production JWT bean wiring, and idempotent environment-only demo Admin provisioner are implemented
+and verified. The ignored local file still needs real JWT keys and a demo BCrypt hash before the
+first live HTTP login smoke test. Refresh rotation/logout remain deferred with advanced auth; the
+active basic-auth demo path is login plus bearer-authenticated session.
 
 ## What changed
 
@@ -36,9 +38,24 @@ wiring are next.
   cookie, protected session endpoint, and generic RFC 9457 invalid-credential response.
 - JWTs contain only user/workspace/role/display claims with issued/expiry times and require an
   absolute URI issuer. Unknown/invalid bearer access is rejected with 401.
-- Security activation is explicit through `talon.security.enabled=true`. Until durable account/
-  session and decoder beans are wired, the default filter chain exposes health only and denies all
-  application routes; this avoids a fake in-memory production auth path.
+- Security activation is explicit through `talon.security.enabled=true`. When disabled, the default
+  filter chain exposes health only and denies all application routes; this avoids a fake in-memory
+  production auth path.
+- Added Flyway V2 workspace/account/membership/refresh-session/job/candidate/application tables,
+  constraints, indexes, `talon_app`, forced RLS policies, and transaction-local workspace context.
+- Kept normal Maven verification network-, Docker-, and Supabase-free. Explicit
+  `postgres-integration` and `supabase-smoke` profiles own real PostgreSQL checks.
+- Applied and validated Flyway V1/V2 against the configured Supabase PostgreSQL 17.6 session
+  pooler. The application remains JDBC/Flyway portable and uses no Supabase Auth, Storage, Data
+  API, or Edge Function.
+- Added `JdbcIdentityAccountStore` for default-workspace account lookup under RLS and atomic hashed
+  refresh-session/last-login persistence. The same adapter atomically provisions workspace, user,
+  and Admin membership through the existing bootstrap port.
+- Added runtime properties and beans for BCrypt, HS256 JWT encoding/decoding, issuer/audience
+  validation, HMAC refresh hashing, authentication service, and JDBC persistence. Authentication
+  stays disabled by default; invalid or sub-256-bit keys fail startup.
+- Added an explicitly enabled, idempotent demo Admin provisioner. Email and BCrypt hash come only
+  from runtime configuration; neither is committed or logged.
 
 ## Why this approach
 
@@ -73,8 +90,12 @@ from becoming database instructions.
   authorization/error infrastructure.
 - Identity bootstrap domain/application files and `WorkspaceBootstrapServiceTests`.
 - Identity authentication application/domain files and `AuthenticationServiceTests`.
-- `apps/api/pom.xml`, identity `api` and `infrastructure/security` adapters,
-  `AuthControllerTests`, and `SecurityAdaptersTests`.
+- `apps/api/pom.xml`, `.env.example`, and Flyway
+  `V2__priority_identity_candidate_schema.sql`.
+- Identity `api`, `infrastructure/security`, and `infrastructure/persistence` adapters.
+- `AuthControllerTests`, `SecurityAdaptersTests`, `AuthenticationRuntimeConfigurationTests`,
+  `DemoAdminProvisionerTests`, `PrioritySchemaMigrationIT`, `SupabaseSchemaSmokeIT`, and
+  `SupabaseIdentityPersistenceIT`.
 
 ## Verification commands and observed results
 
@@ -104,15 +125,31 @@ from becoming database instructions.
   Spotless reported all 39 Java files clean.
 - Environment verification: Maven 3.9.11 uses Oracle Java 21.0.11 from
   `C:\Program Files\Java\jdk-21.0.11`; direct Maven commands now work with the E-drive cache.
-- Docker-backed checks are blocked because Docker is not currently discoverable from this shell.
+- Initial Testcontainers run with the Docker Desktop Linux engine and Testcontainers 1.21.4 —
+  Flyway V1/V2 applied to PostgreSQL 17.10 and five schema/RLS/constraint tests passed.
+- Supabase configuration shape validation checks JDBC prefix, session-pooler port 5432, separate
+  username/password, and ignored-file status without printing values.
+- Supabase smoke: `mvn ... -Psupabase-smoke spotless:apply verify` — Flyway applied two migrations
+  to PostgreSQL 17.6; schema, `talon_app`, and RLS policy assertions passed. The expanded rerun
+  completed in 1:23 with 26 local tests and three Supabase integration tests passing.
+- Persistence red test failed at compilation because `JdbcIdentityAccountStore` was absent; green
+  Supabase tests verified account mapping, workspace-role mapping, RLS transaction context, atomic
+  refresh/login persistence, atomic workspace bootstrap, duplicate protection, and cleanup.
+- Runtime wiring red test failed because `AuthenticationRuntimeConfiguration` was absent; the
+  focused green run passed three configuration tests. Provisioner red failed because its runner was
+  absent; the focused green run passed two idempotency/configuration tests.
+- Current network-free full verification: `mvn ... spotless:apply verify` — build succeeded; 28
+  tests passed and Spotless reported all 49 Java files clean. Docker and Supabase were not started
+  or contacted by this default command.
 
 ## Blockers, prerequisites, and exact next step
 
-- External prerequisites: runnable Docker engine/CLI, PostgreSQL/Supabase connection, AWS account,
-  private S3/SQS resources, malware scanner choice, and an xAI key with usable billing.
-- Supabase team action: create the project, retain the session-pooler host/port 5432/database/user,
-  enable PostgreSQL SSL enforcement, and keep the password out of Git/Slack. Do not create Talon
-  schema or policies manually; Flyway owns them.
-- Exact next step: write migration/persistence tests for identity, refresh sessions, jobs,
-  candidates, applications, tenant uniqueness/RLS, and compensation checks; then wire auth using
-  runtime-only secrets. Refresh rotation/logout endpoints remain pending durable session state.
+- Supabase is connected through its TLS session pooler and is at Flyway version 2. The local
+  `.env.supabase` is ignored and its values were never committed. Replace the newly added JWT key
+  and demo BCrypt placeholders locally, then enable `TALON_SECURITY_ENABLED` and
+  `TALON_DEMO_ADMIN_ENABLED` for the live smoke test.
+- AWS account, private S3/SQS resources, malware scanner choice, and a funded xAI key remain future
+  external prerequisites for the two priority features.
+- Exact next step: generate two independent 32-byte Base64 secrets plus one BCrypt demo-password
+  hash, run the API against Supabase, and verify login then `/api/v1/session`. After that gate, add
+  the minimal job/candidate/application query APIs required by CSV import and search.
