@@ -4,7 +4,7 @@ import com.talon.ats.identity.domain.WorkspaceBootstrap;
 
 public interface IdentityWorkspaceBootstrapStore {
 
-  boolean hasMembership(String cognitoSubject);
+  boolean hasMembershipByNormalizedEmail(String normalizedEmail);
 
   void save(WorkspaceBootstrap workspaceBootstrap);
 }

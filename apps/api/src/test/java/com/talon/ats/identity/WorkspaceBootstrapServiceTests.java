@@ -25,6 +25,8 @@ import org.junit.jupiter.api.Test;
 class WorkspaceBootstrapServiceTests {
 
   private static final Instant NOW = Instant.parse("2026-08-07T10:00:00Z");
+  private static final String PASSWORD_HASH =
+      "$2a$12$WjJ0PmyFD6h7xjNQxJV13u98Ot4GY9NaAcNn0me04X6NxoJ/Oc9cW";
 
   @Test
   void createsUserWorkspaceAndAdministratorMembershipAtomically() {
@@ -34,9 +36,9 @@ class WorkspaceBootstrapServiceTests {
     BootstrapWorkspaceResult result =
         service.bootstrap(
             new BootstrapWorkspaceCommand(
-                " cognito|vraj ",
                 " VRAJ@Example.com ",
                 " Vraj Dobariya ",
+                PASSWORD_HASH,
                 " Acme Hiring ",
                 " Acme Hiring ",
                 "Asia/Kolkata"));
@@ -50,8 +52,9 @@ class WorkspaceBootstrapServiceTests {
     WorkspaceMembership membership = store.saved.membership();
 
     assertThat(user.id()).isEqualTo(uuid(1));
-    assertThat(user.cognitoSubject()).isEqualTo("cognito|vraj");
-    assertThat(user.email()).isEqualTo("vraj@example.com");
+    assertThat(user.email()).isEqualTo("VRAJ@Example.com");
+    assertThat(user.normalizedEmail()).isEqualTo("vraj@example.com");
+    assertThat(user.passwordHash()).isEqualTo(PASSWORD_HASH);
     assertThat(workspace.name()).isEqualTo("Acme Hiring");
     assertThat(workspace.slug()).isEqualTo("acme-hiring");
     assertThat(workspace.defaultTimezone()).isEqualTo("Asia/Kolkata");
@@ -72,14 +75,35 @@ class WorkspaceBootstrapServiceTests {
             () ->
                 service.bootstrap(
                     new BootstrapWorkspaceCommand(
-                        "cognito|vraj",
                         "vraj@example.com",
                         "Vraj",
+                        PASSWORD_HASH,
                         "Another Workspace",
                         "another-workspace",
                         "UTC")))
         .isInstanceOf(WorkspaceBootstrapNotAllowedException.class)
         .hasMessageContaining("already belongs to a workspace");
+
+    assertThat(store.saved).isNull();
+  }
+
+  @Test
+  void rejectsBootstrapWhenCredentialIsNotABcryptHash() {
+    RecordingStore store = new RecordingStore(false);
+
+    assertThatThrownBy(
+            () ->
+                service(store)
+                    .bootstrap(
+                        new BootstrapWorkspaceCommand(
+                            "vraj@example.com",
+                            "Vraj",
+                            "plaintext-password",
+                            "Acme Hiring",
+                            "acme-hiring",
+                            "UTC")))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("passwordHash must be a BCrypt hash");
 
     assertThat(store.saved).isNull();
   }
@@ -106,7 +130,8 @@ class WorkspaceBootstrapServiceTests {
     }
 
     @Override
-    public boolean hasMembership(String cognitoSubject) {
+    public boolean hasMembershipByNormalizedEmail(String normalizedEmail) {
+      assertThat(normalizedEmail).isEqualTo("vraj@example.com");
       return hasMembership;
     }
 

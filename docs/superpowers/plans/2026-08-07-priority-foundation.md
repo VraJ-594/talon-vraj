@@ -39,11 +39,11 @@
 - Consumes: approved design spec.
 - Produces: one consistent source of truth and living implementation handoff.
 
-- [ ] Replace immediate Cognito/2FA and broad feature delivery language with minimal application authentication followed by import/export and search.
-- [ ] Remove all ZIP/archive import requirements and mark unrelated product modules deferred.
-- [ ] Record private S3, public-Drive demo limitation, durable worker, and Grok-to-DSL decisions in ADRs.
-- [ ] Run `rg -n -i "CSV/ZIP|ZIP candidate|Cognito resource|TOTP enrollment" docs/architecture docs/plans` and verify every remaining mention is historical/deferred rather than an active requirement.
-- [ ] Update the implementation handoff and commit `docs: prioritize import export and search`.
+- [x] Replace immediate Cognito/2FA and broad feature delivery language with minimal application authentication followed by import/export and search.
+- [x] Remove all ZIP/archive import requirements and mark unrelated product modules deferred.
+- [x] Record private S3, public-Drive demo limitation, durable worker, and Grok-to-DSL decisions in ADRs.
+- [x] Run `rg -n -i "CSV/ZIP|ZIP candidate|Cognito resource|TOTP enrollment" docs/architecture docs/plans` and verify every remaining mention is historical/deferred rather than an active requirement.
+- [x] Update the implementation handoff and commit the documentation checkpoint (`23f4f48`).
 
 ### Task 2: Refactor identity model to application-owned accounts
 
@@ -58,11 +58,11 @@
 - Consumes: a normalized email and externally supplied BCrypt hash from controlled provisioning.
 - Produces: `AppUser(id, email, normalizedEmail, displayName, passwordHash, status, createdAt, lastLoginAt)` and email-scoped bootstrap lookup.
 
-- [ ] Update the bootstrap test first to expect normalized email/password-hash account data and `hasMembershipByEmail`.
-- [ ] Run `mvn -Dmaven.repo.local=E:\maven-repo -f apps/api/pom.xml -Dtest=WorkspaceBootstrapServiceTests test` and verify compilation/assertion failure references the old Cognito contract.
-- [ ] Refactor the minimum domain/application types without adding an HTTP sign-up route.
-- [ ] Run the focused test and verify it passes.
-- [ ] Run `mvn -Dmaven.repo.local=E:\maven-repo -f apps/api/pom.xml spotless:apply verify` and commit `refactor: use application owned identity accounts`.
+- [x] Update the bootstrap test first to expect normalized email/password-hash account data and `hasMembershipByNormalizedEmail`.
+- [x] Run `mvn -Dmaven.repo.local=E:\maven-repo -f apps/api/pom.xml -Dtest=WorkspaceBootstrapServiceTests test` and verify compilation failure references the old Cognito contract.
+- [x] Refactor the minimum domain/application types without adding an HTTP sign-up route.
+- [x] Run the focused test and verify 3 tests pass.
+- [x] Run `mvn -Dmaven.repo.local=E:\maven-repo -f apps/api/pom.xml spotless:apply verify`; 13 tests pass. Commit follows this record update.
 
 ### Task 3: Add login and refresh-session application contracts
 

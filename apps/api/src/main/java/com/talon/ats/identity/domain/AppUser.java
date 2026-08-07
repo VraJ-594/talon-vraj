@@ -5,9 +5,10 @@ import java.util.UUID;
 
 public record AppUser(
     UUID id,
-    String cognitoSubject,
     String email,
+    String normalizedEmail,
     String displayName,
+    String passwordHash,
     AppUserStatus status,
     Instant createdAt,
     Instant lastLoginAt) {}

@@ -6,7 +6,8 @@ Status: in progress.
 
 The approved active slice is minimal application-owned authentication followed by candidate CSV
 import/private export and dual-mode candidate search. The design and three executable plans are
-approved. Backend implementation begins with the identity refactor.
+approved. The application-owned identity-domain refactor is implemented and verified; login and
+refresh-session application contracts are next.
 
 ## What changed
 
@@ -18,6 +19,9 @@ approved. Backend implementation begins with the identity refactor.
   search.
 - Updated the provider-port ADR for Drive, object storage, scanner, queue, and Grok boundaries.
 - Prepared a reduced parallel-frontend prompt covering only the approved workflow.
+- Removed the Cognito subject from `AppUser`, bootstrap command, service, and persistence port.
+- Added canonical display email, normalized lookup email, BCrypt hash storage, and rejection of
+  plaintext/non-BCrypt provisioning values.
 
 ## Why this approach
 
@@ -50,6 +54,7 @@ from becoming database instructions.
 - `docs/prompts/frontend-parallel-session.md`
 - Planned backend modules: `identity`, `jobs`, `candidates`, `imports`, `files`, `search`, and shared
   authorization/error infrastructure.
+- Identity bootstrap domain/application files and `WorkspaceBootstrapServiceTests`.
 
 ## Verification commands and observed results
 
@@ -58,12 +63,17 @@ from becoming database instructions.
   warning).
 - `rg` scans for active Cognito, CSV/ZIP, Gemini fallback, and Google Calendar decisions — no active
   references remain; Cognito appears only in ADR 0007 context explaining the superseded choice.
-- Backend focused and full Maven verification are pending the first test-first code checkpoint.
+- Focused red test: `mvn ... -Dtest=WorkspaceBootstrapServiceTests test` — failed at test compile
+  because the old `AppUser` lacked `normalizedEmail/passwordHash` and the store still exposed
+  `hasMembership(cognitoSubject)`, confirming the intended contract gap.
+- Focused green test: the same command — 3 tests passed.
+- Full verification: `mvn ... spotless:apply verify` — build succeeded; 13 tests passed and Spotless
+  reported all 22 Java files clean.
 - Docker-backed checks are blocked because Docker is not currently discoverable from this shell.
 
 ## Blockers, prerequisites, and exact next step
 
 - External prerequisites: runnable Docker engine/CLI, PostgreSQL/Supabase connection, AWS account,
   private S3/SQS resources, malware scanner choice, and an xAI key with usable billing.
-- Exact next step: align the remaining HLD/LLD/API/database/security/deployment documents, then add
-  a failing identity test that removes the Cognito-subject assumption.
+- Exact next step: add failing authentication-service tests for valid/generic-invalid/suspended
+  login and hashed seven-day refresh-session creation, then implement the application contracts.

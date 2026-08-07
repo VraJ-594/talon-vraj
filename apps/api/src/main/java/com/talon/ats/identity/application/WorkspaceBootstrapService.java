@@ -18,6 +18,8 @@ import java.util.function.Supplier;
 public final class WorkspaceBootstrapService {
 
   private static final int DEFAULT_RETENTION_MONTHS = 24;
+  private static final String BCRYPT_HASH_PATTERN =
+      "^\\$2[aby]\\$(0[4-9]|[12][0-9]|3[01])\\$[./A-Za-z0-9]{53}$";
 
   private final IdentityWorkspaceBootstrapStore store;
   private final Supplier<UUID> idGenerator;
@@ -32,20 +34,21 @@ public final class WorkspaceBootstrapService {
 
   public BootstrapWorkspaceResult bootstrap(BootstrapWorkspaceCommand command) {
     Objects.requireNonNull(command, "command is required");
-    String cognitoSubject = required(command.cognitoSubject(), "cognitoSubject");
+    String email = required(command.email(), "email");
+    String normalizedEmail = normalizedEmail(email);
 
-    if (store.hasMembership(cognitoSubject)) {
-      throw new WorkspaceBootstrapNotAllowedException(
-          "Authenticated identity already belongs to a workspace");
+    if (store.hasMembershipByNormalizedEmail(normalizedEmail)) {
+      throw new WorkspaceBootstrapNotAllowedException("Account already belongs to a workspace");
     }
 
     Instant now = clock.instant();
     AppUser user =
         new AppUser(
             nextId(),
-            cognitoSubject,
-            normalizedEmail(command.email()),
+            email,
+            normalizedEmail,
             required(command.displayName(), "displayName"),
+            bcryptHash(command.passwordHash()),
             AppUserStatus.ACTIVE,
             now,
             now);
@@ -86,6 +89,14 @@ public final class WorkspaceBootstrapService {
 
   private static String normalizedEmail(String value) {
     return required(value, "email").toLowerCase(Locale.ROOT);
+  }
+
+  private static String bcryptHash(String value) {
+    String passwordHash = required(value, "passwordHash");
+    if (!passwordHash.matches(BCRYPT_HASH_PATTERN)) {
+      throw new IllegalArgumentException("passwordHash must be a BCrypt hash");
+    }
+    return passwordHash;
   }
 
   private static String normalizedSlug(String value) {
