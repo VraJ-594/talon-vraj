@@ -11,6 +11,8 @@ Checkpoints 1 through 3 are complete and received user visual sign-off. The curr
 
 The HTTP gateway red test first failed because the gateway and central API client did not exist. The implemented gateway validates the backend's flat login/session responses, retains the bearer token only in the API client instance, includes credentials for the backend-set HttpOnly refresh cookie, maps stable RFC 9457 codes, and treats malformed success payloads as unavailable. A second red/green cycle proves fixture auth cannot activate in production. Automated formatting, lint, 72 tests, production build, production dependency audit, and whitespace gates are green. A live browser/API smoke still requires the updated backend process to be restarted.
 
+The sign-in page's isolated console 404 was traced to the browser's implicit `/favicon.ico` request: the document did not declare a favicon. The document now references an SVG derived from the existing Talon brand mark, and both the live development response and production artifact contain the icon.
+
 ## What changed
 
 - Replaced the broad Jobs fixture screen with a protected, PDF-directed ATS shell whose primary destinations are Candidates, Import applications, and Search.
@@ -24,6 +26,7 @@ The HTTP gateway red test first failed because the gateway and central API clien
 - Added a Vite `/api` development proxy to `http://localhost:8080`; `VITE_API_BASE_URL` remains available for deployments that use a configured API origin.
 - Removed the synthetic demo email and workspace copy from the runtime sign-in screen; the production bundle contains no auth-fixture identity markers.
 - Tightened `accessTokenExpiresAt` validation to the backend's UTC ISO `Instant` shape, including calendar-valid date/time components.
+- Added an explicit Talon SVG favicon so the sign-in page no longer triggers the browser's missing `/favicon.ico` request.
 - Added accessible email/password sign-in, password visibility, pending submission, generic invalid credentials, locked/rate-limited, unavailable, and expired-session states.
 - Added protected-route redirects, safe return to an allowlisted requested priority route after login, restored-session behavior, and awaited logout.
 - Added an application error boundary with a recovery route and no raw error disclosure.
@@ -101,6 +104,8 @@ The candidate composition extends the existing Talon visual language: an operati
 ## Files and modules affected
 
 - `apps/web/package.json`
+- `apps/web/index.html`
+- `apps/web/public/favicon.svg`
 - `package-lock.json`
 - `apps/web/src/app/App.tsx`
 - `apps/web/src/app/App.test.tsx`
@@ -202,6 +207,7 @@ The candidate composition extends the existing Talon visual language: an operati
 | Production auth-fixture scan | Passed: built assets contain none of `admin@talon.demo`, `fixture-workspace-admin`, or `fixture-talon-workspace`. |
 | Independent HTTP-auth code review | Approved with no remaining Critical or Important findings after strict timestamp and production-fixture remediation. No `apps/api/**` changes detected. |
 | Local process availability check | `http://localhost:8080/actuator/health` returned `UP` and `http://localhost:5173` returned HTTP 200. The backend process was not restarted in this checkpoint, so these responses are not counted as current-code login E2E evidence. |
+| Sign-in favicon red/green check | Before the fix, `/favicon.ico` returned 404 and `/favicon.svg` fell through to HTML. After declaring and adding the asset, `/favicon.svg` returns HTTP 200 as `image/svg+xml`; `dist/favicon.svg` is present after the production build. |
 
 ## Integration status
 
