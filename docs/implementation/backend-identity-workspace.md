@@ -47,13 +47,33 @@ An authenticated identity does not receive ATS data access merely by existing in
 
 The tests prove normalized atomic bootstrap data, administrator membership linkage, deterministic timestamps/IDs, and rejection without persistence when the identity already has a membership. Persistence transactionality and database uniqueness remain integration responsibilities and are not claimed yet.
 
+## Checkpoint 2: Invitation acceptance and role policy
+
+### What and why
+
+- Added an immutable `WorkspaceInvitation` domain type that stores only a token hash reference, never a plaintext token.
+- Bound invitation acceptance to a normalized authenticated email address so possession of a leaked link alone does not grant membership.
+- Defined expiry as exclusive: acceptance at or after `expiresAt` is rejected.
+- Returned a new accepted invitation state with `acceptedAt`; subsequent acceptance attempts are rejected as single-use.
+- Added `WorkspacePermissionPolicy.canManageMembers` with an explicit fixed-role rule: only `WORKSPACE_ADMIN` may manage membership. Recruiter, hiring-manager, and interviewer denial is covered individually.
+
+These are domain rules rather than controller checks so every future REST, worker, or administrative caller receives the same protection. Database constraints and service authorization will provide additional enforcement when adapters are added.
+
+### Verification evidence
+
+| Check | Result |
+|---|---|
+| Focused red phase | Failed compilation because invitation and permission-policy types did not exist, as intended |
+| Focused green phase | 7 invitation/role-policy tests passed |
+| Full Maven verification | 12 tests passed; executable JAR packaging, Spring Modulith verification, and Spotless passed |
+
 ## Environment dependency
 
 Docker Desktop/CLI remains unavailable to the shell. PostgreSQL schema, RLS, Flyway, Compose, and Testcontainers verification must remain pending until Docker is launched from its existing E-drive installation or its executable path is supplied.
 
 ## Next steps
 
-1. Add invitation expiry, email binding, single-use acceptance, and fixed-role policy tests.
-2. Add request-principal/session resolution contracts without coupling them to HTTP transport.
+1. Add request-principal/session resolution contracts without coupling them to HTTP transport.
+2. Add invitation creation/acceptance application services with hashed-token and atomic-membership persistence ports.
 3. Add Flyway schema and PostgreSQL adapters only after Docker is reachable, then prove transactionality and RLS with integration tests.
 4. Add Cognito/local identity adapters and REST endpoints after the application contracts are stable.
