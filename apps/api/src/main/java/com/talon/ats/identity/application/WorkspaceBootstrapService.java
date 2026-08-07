@@ -1,12 +1,12 @@
 package com.talon.ats.identity.application;
 
+import com.talon.ats.identity.contract.WorkspaceRole;
 import com.talon.ats.identity.domain.AppUser;
 import com.talon.ats.identity.domain.AppUserStatus;
 import com.talon.ats.identity.domain.Workspace;
 import com.talon.ats.identity.domain.WorkspaceBootstrap;
 import com.talon.ats.identity.domain.WorkspaceMembership;
 import com.talon.ats.identity.domain.WorkspaceMembershipStatus;
-import com.talon.ats.identity.domain.WorkspaceRole;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;

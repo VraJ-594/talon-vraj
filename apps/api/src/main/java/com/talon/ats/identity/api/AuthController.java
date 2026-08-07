@@ -59,6 +59,7 @@ public class AuthController {
     return new SessionResponse(
         UUID.fromString(jwt.getSubject()),
         UUID.fromString(jwt.getClaimAsString("workspace_id")),
+        jwt.getClaimAsString("workspace_name"),
         jwt.getClaimAsString("role"),
         jwt.getClaimAsString("display_name"));
   }
@@ -68,6 +69,7 @@ public class AuthController {
   record LoginResponse(
       UUID userId,
       UUID workspaceId,
+      String workspaceName,
       String role,
       String displayName,
       String accessToken,
@@ -77,6 +79,7 @@ public class AuthController {
       return new LoginResponse(
           result.userId(),
           result.workspaceId(),
+          result.workspaceName(),
           result.role().name(),
           result.displayName(),
           result.accessToken(),
@@ -84,5 +87,6 @@ public class AuthController {
     }
   }
 
-  record SessionResponse(UUID userId, UUID workspaceId, String role, String displayName) {}
+  record SessionResponse(
+      UUID userId, UUID workspaceId, String workspaceName, String role, String displayName) {}
 }

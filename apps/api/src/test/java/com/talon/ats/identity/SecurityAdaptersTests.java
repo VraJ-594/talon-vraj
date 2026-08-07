@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.nimbusds.jose.proc.SecurityContext;
 import com.talon.ats.identity.application.TokenIssuer.AccessTokenClaims;
-import com.talon.ats.identity.domain.WorkspaceRole;
+import com.talon.ats.identity.contract.WorkspaceRole;
 import com.talon.ats.identity.infrastructure.security.BCryptPasswordVerifier;
 import com.talon.ats.identity.infrastructure.security.JwtTokenIssuer;
 import java.nio.charset.StandardCharsets;
@@ -57,7 +57,13 @@ class SecurityAdaptersTests {
     String token =
         issuer.issueAccessToken(
             new AccessTokenClaims(
-                userId, workspaceId, WorkspaceRole.WORKSPACE_ADMIN, "Vraj", issuedAt, expiresAt));
+                userId,
+                workspaceId,
+                "Talon Demo",
+                WorkspaceRole.WORKSPACE_ADMIN,
+                "Vraj",
+                issuedAt,
+                expiresAt));
     NimbusJwtDecoder decoder =
         NimbusJwtDecoder.withSecretKey(jwtKey).macAlgorithm(MacAlgorithm.HS256).build();
     JwtTimestampValidator timestampValidator = new JwtTimestampValidator();
@@ -69,6 +75,7 @@ class SecurityAdaptersTests {
     assertThat(decoded.getIssuer().toString()).isEqualTo("https://api.talon.local");
     assertThat(decoded.getAudience()).containsExactly("talon-web");
     assertThat(decoded.getClaimAsString("workspace_id")).isEqualTo(workspaceId.toString());
+    assertThat(decoded.getClaimAsString("workspace_name")).isEqualTo("Talon Demo");
     assertThat(decoded.getClaimAsString("role")).isEqualTo("WORKSPACE_ADMIN");
     assertThat(decoded.getClaimAsString("display_name")).isEqualTo("Vraj");
     assertThat(decoded.getIssuedAt()).isEqualTo(issuedAt);

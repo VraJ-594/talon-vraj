@@ -60,7 +60,7 @@ Detailed steps: [priority-foundation](../superpowers/plans/2026-08-07-priority-f
   configuration, never Git.
 - [ ] Implement login, refresh rotation, logout, request principal, Admin/Recruiter policies, and
   RFC 9457 errors.
-- [ ] Add the minimum job, candidate, and application model needed by the priority slice.
+- [x] Add the minimum job, candidate, and application model needed by the priority slice.
 - [ ] Verify focused tests, full Maven tests, migrations, and module boundaries.
 
 Gate: an existing Admin can authenticate and access only their workspace.

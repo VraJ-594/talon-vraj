@@ -1,12 +1,13 @@
 package com.talon.ats.identity.application;
 
-import com.talon.ats.identity.domain.WorkspaceRole;
+import com.talon.ats.identity.contract.WorkspaceRole;
 import java.time.Instant;
 import java.util.UUID;
 
 public record AuthenticationResult(
     UUID userId,
     UUID workspaceId,
+    String workspaceName,
     WorkspaceRole role,
     String displayName,
     String accessToken,

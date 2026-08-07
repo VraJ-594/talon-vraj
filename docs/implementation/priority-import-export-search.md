@@ -11,7 +11,11 @@ production JWT bean wiring, and idempotent environment-only demo Admin provision
 and verified. Independent local JWT/HMAC keys, a random demo password, and its BCrypt hash were
 generated without printing values; the live Supabase-backed login and bearer-session flow passed.
 Refresh rotation/logout remain deferred with advanced auth; the active basic-auth demo path is
-login plus bearer-authenticated session.
+login plus bearer-authenticated session. Login and session now expose the workspace name needed by
+the frontend gateway. Tenant-scoped job APIs and the candidate/application create-or-match facade
+are implemented and locally verified. Flyway V3 and real Supabase persistence tests for those new
+paths are present but are not marked verified because the session pooler became unreachable during
+the latest run.
 
 ## What changed
 
@@ -64,6 +68,22 @@ login plus bearer-authenticated session.
 - AWS deployment will inject the same environment variable contract from Secrets Manager through
   the Terraform-managed ECS task definition. Secrets are not baked into the image, committed in
   `.tfvars`, or written into application Terraform resources.
+- Added `workspaceName` to the authenticated account/result, signed JWT claim, login response, and
+  session response so the frontend can map the real API without a hard-coded workspace label.
+- Moved `WorkspaceRole` into the explicitly exposed `identity::workspace-access` contract. Jobs and
+  candidates can depend on the authorization vocabulary without reaching into identity internals.
+- Added the jobs domain/application/controller/JDBC layers. Authenticated Admins and Recruiters can
+  create active jobs and list tenant-scoped import targets; the API maps internal `ACTIVE` to the
+  frontend `OPEN` status without changing the database vocabulary.
+- Added forward Flyway V3 for required job location. Existing rows receive `Unspecified` during
+  migration; new writes must provide a non-blank location.
+- Added typed candidate/application input models, ISO currency plus annual minor units, application
+  service, and JDBC port adapter. Candidate email matching and one-application-per-job insertion use
+  PostgreSQL uniqueness with `ON CONFLICT`, making replay return the original IDs instead of
+  duplicating records.
+- Added real-database integration tests for job isolation and candidate/application replay. These
+  compile and are selected by `supabase-smoke`; their latest execution is blocked by remote pooler
+  reachability and therefore is not counted as passing evidence.
 
 ## Why this approach
 
@@ -82,6 +102,10 @@ from becoming database instructions.
   download URL; artifact lifecycle is seven days.
 - Search: Cmd+K/explicit filters → typed criteria → PostgreSQL. Natural language → Grok restricted
   DSL → backend validation → the same typed criteria and repository.
+- Jobs: verified JWT workspace/role → application service → transaction-local tenant context →
+  import-target query or active-job insert.
+- Candidate/application foundation: validated typed CSV row → active job check → normalized email
+  candidate insert/match → application insert/match → stable replay result.
 
 ## Files and modules affected
 
@@ -101,6 +125,9 @@ from becoming database instructions.
 - `apps/api/pom.xml`, `.env.example`, and Flyway
   `V2__priority_identity_candidate_schema.sql`.
 - Identity `api`, `infrastructure/security`, and `infrastructure/persistence` adapters.
+- Identity `contract` named interface plus the `jobs` and `candidates` domain/application/API/JDBC
+  modules.
+- Flyway `V3__job_import_target_location.sql`.
 - `AuthControllerTests`, `SecurityAdaptersTests`, `AuthenticationRuntimeConfigurationTests`,
   `DemoAdminProvisionerTests`, `PrioritySchemaMigrationIT`, `SupabaseSchemaSmokeIT`, and
   `SupabaseIdentityPersistenceIT`.
@@ -156,12 +183,33 @@ from becoming database instructions.
   the idempotent provisioner created the demo workspace/Admin, `/actuator/health` returned `UP`,
   `/api/v1/auth/login` succeeded, and the resulting bearer token resolved `/api/v1/session` with
   `WORKSPACE_ADMIN` plus non-empty user/workspace IDs. Passwords and tokens were not printed.
+- Auth/frontend-contract red run — focused tests failed at compilation because authenticated account,
+  token claims, and response types did not yet contain `workspaceName`. Green run passed 10/10 auth
+  controller/service/adapter tests after the additive contract implementation.
+- Jobs service red run — test compilation failed because the jobs module did not exist. Green
+  service run passed 3/3; controller red failed because `JobController` was absent and its green run
+  passed 2/2.
+- The first expanded verification correctly failed the Modulith boundary test because jobs imported
+  an unexposed identity-domain enum. Moving that enum into the named workspace-access contract made
+  the focused auth/jobs/architecture suite pass 16/16.
+- Candidate/application service red run — test compilation failed because the application port and
+  typed models were absent. Green service plus module-boundary run passed 4/4.
+- Current network-free full verification: `mvn ... spotless:apply verify` — build succeeded; 36
+  tests passed and Spotless reported all 72 Java files clean.
+- Latest `supabase-smoke` attempt: all 33 then-current local tests passed, but four integration tests
+  failed to obtain a socket to the configured session pooler (`Permission denied: getsockopt`). An
+  escalated retry remained blocked on the remote connection and was terminated; Flyway V3 was not
+  claimed as applied.
 
 ## Blockers, prerequisites, and exact next step
 
-- Supabase is connected through its TLS session pooler and is at Flyway version 2. Local database,
-  JWT, refresh-HMAC, and demo-login values remain in ignored files and were never committed.
+- The last verified Supabase state is Flyway version 2. The latest pooler connection is currently
+  unreachable from this shell, so V3 and the new job/candidate persistence integration tests remain
+  pending. Local database, JWT, refresh-HMAC, and demo-login values remain in ignored files and were
+  never committed.
 - AWS account, private S3/SQS resources, malware scanner choice, and a funded xAI key remain future
   external prerequisites for the two priority features.
-- Exact next step: add the minimal authenticated job and candidate/application query APIs required
-  by CSV import and deterministic/natural-language search, then begin the durable CSV import model.
+- Exact next step: begin the versioned candidate CSV mapping/validation domain against the completed
+  job and candidate/application ports. When the pooler is reachable, run the saved database-only
+  `supabase-smoke` command to apply V3 and close the persistence gate before wiring live frontend
+  HTTP gateways.

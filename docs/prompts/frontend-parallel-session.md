@@ -148,6 +148,22 @@ Implement:
 - Access JWT stays in memory; refresh behavior is handled by the centralized auth/HTTP layer.
 - Never store candidate PII or tokens in local storage, logs, or fixtures committed to Git.
 
+### Current backend integration checkpoint
+
+- `POST /api/v1/auth/login` accepts `{email,password}` and returns the flat object
+  `{userId,workspaceId,workspaceName,role,displayName,accessToken,accessTokenExpiresAt}`. It also
+  sends the opaque refresh token only as a Secure/HttpOnly/SameSite cookie; the frontend must never
+  read or persist that cookie.
+- `GET /api/v1/session` requires the bearer access token and returns
+  `{userId,workspaceId,workspaceName,role,displayName}`.
+- Until refresh/logout routes land, `HttpAuthGateway.logout()` clears the in-memory access token and
+  session locally. A full browser reload requires sign-in again; do not compensate with local or
+  session storage.
+- `GET /api/v1/jobs` returns import targets shaped as
+  `{id,title,department,location,status}` where status is `OPEN` or `ON_HOLD`.
+- `POST /api/v1/jobs` accepts `{title,department,location}` and derives workspace/role only from the
+  verified JWT. The client must not send a workspace ID.
+
 ## Visual direction
 
 - Preserve and refactor the existing PDF-directed shell rather than replacing it with a generic template.

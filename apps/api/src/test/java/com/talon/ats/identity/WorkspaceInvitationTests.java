@@ -3,10 +3,10 @@ package com.talon.ats.identity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.talon.ats.identity.contract.WorkspaceRole;
 import com.talon.ats.identity.domain.InvitationNotAcceptableException;
 import com.talon.ats.identity.domain.WorkspaceInvitation;
 import com.talon.ats.identity.domain.WorkspacePermissionPolicy;
-import com.talon.ats.identity.domain.WorkspaceRole;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.stream.Stream;

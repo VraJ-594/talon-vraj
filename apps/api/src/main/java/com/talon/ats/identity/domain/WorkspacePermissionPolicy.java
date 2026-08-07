@@ -1,5 +1,6 @@
 package com.talon.ats.identity.domain;
 
+import com.talon.ats.identity.contract.WorkspaceRole;
 import java.util.Objects;
 
 public final class WorkspacePermissionPolicy {

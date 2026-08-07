@@ -64,6 +64,7 @@ public final class AuthenticationService {
         new TokenIssuer.AccessTokenClaims(
             account.user().id(),
             account.membership().workspaceId(),
+            account.workspaceName(),
             account.membership().role(),
             account.user().displayName(),
             issuedAt,
@@ -93,6 +94,7 @@ public final class AuthenticationService {
     return new AuthenticationResult(
         account.user().id(),
         account.membership().workspaceId(),
+        account.workspaceName(),
         account.membership().role(),
         account.user().displayName(),
         accessToken,

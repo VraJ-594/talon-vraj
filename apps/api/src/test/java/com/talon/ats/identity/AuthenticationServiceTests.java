@@ -11,12 +11,12 @@ import com.talon.ats.identity.application.AuthenticationService;
 import com.talon.ats.identity.application.IdentityAccountStore;
 import com.talon.ats.identity.application.PasswordVerifier;
 import com.talon.ats.identity.application.TokenIssuer;
+import com.talon.ats.identity.contract.WorkspaceRole;
 import com.talon.ats.identity.domain.AppUser;
 import com.talon.ats.identity.domain.AppUserStatus;
 import com.talon.ats.identity.domain.RefreshSession;
 import com.talon.ats.identity.domain.WorkspaceMembership;
 import com.talon.ats.identity.domain.WorkspaceMembershipStatus;
-import com.talon.ats.identity.domain.WorkspaceRole;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -53,6 +53,7 @@ class AuthenticationServiceTests {
     assertThat(result.refreshTokenExpiresAt()).isEqualTo(NOW.plus(Duration.ofDays(7)));
     assertThat(result.userId()).isEqualTo(uuid(1));
     assertThat(result.workspaceId()).isEqualTo(uuid(2));
+    assertThat(result.workspaceName()).isEqualTo("Talon Demo");
     assertThat(result.role()).isEqualTo(WorkspaceRole.WORKSPACE_ADMIN);
 
     assertThat(store.savedSession.tokenHash()).isEqualTo("hashed-refresh-token");
@@ -62,6 +63,7 @@ class AuthenticationServiceTests {
     assertThat(store.loginRecordedAt).isEqualTo(NOW);
     assertThat(tokenIssuer.claims.userId()).isEqualTo(uuid(1));
     assertThat(tokenIssuer.claims.workspaceId()).isEqualTo(uuid(2));
+    assertThat(tokenIssuer.claims.workspaceName()).isEqualTo("Talon Demo");
     assertThat(tokenIssuer.claims.role()).isEqualTo(WorkspaceRole.WORKSPACE_ADMIN);
     assertThat(tokenIssuer.claims.displayName()).isEqualTo("Vraj");
   }
@@ -97,7 +99,9 @@ class AuthenticationServiceTests {
   void returnsSameGenericFailureForSuspendedAccountAfterPasswordVerification() {
     AuthenticationAccount suspended =
         new AuthenticationAccount(
-            user(AppUserStatus.SUSPENDED), membership(WorkspaceMembershipStatus.ACTIVE));
+            user(AppUserStatus.SUSPENDED),
+            membership(WorkspaceMembershipStatus.ACTIVE),
+            "Talon Demo");
     RecordingPasswordVerifier passwordVerifier = new RecordingPasswordVerifier(true);
     RecordingAccountStore store = new RecordingAccountStore(Optional.of(suspended));
 
@@ -128,7 +132,7 @@ class AuthenticationServiceTests {
 
   private static AuthenticationAccount activeAccount() {
     return new AuthenticationAccount(
-        user(AppUserStatus.ACTIVE), membership(WorkspaceMembershipStatus.ACTIVE));
+        user(AppUserStatus.ACTIVE), membership(WorkspaceMembershipStatus.ACTIVE), "Talon Demo");
   }
 
   private static AppUser user(AppUserStatus status) {

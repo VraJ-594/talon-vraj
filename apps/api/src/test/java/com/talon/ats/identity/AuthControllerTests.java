@@ -51,7 +51,8 @@ class AuthControllerTests {
             new AuthenticationResult(
                 USER_ID,
                 WORKSPACE_ID,
-                com.talon.ats.identity.domain.WorkspaceRole.WORKSPACE_ADMIN,
+                "Talon Demo",
+                com.talon.ats.identity.contract.WorkspaceRole.WORKSPACE_ADMIN,
                 "Vraj",
                 "access-token",
                 Instant.parse("2026-08-07T10:15:00Z"),
@@ -76,6 +77,7 @@ class AuthControllerTests {
         .andExpect(jsonPath("$.accessToken").value("access-token"))
         .andExpect(jsonPath("$.refreshToken").doesNotExist())
         .andExpect(jsonPath("$.workspaceId").value(WORKSPACE_ID.toString()))
+        .andExpect(jsonPath("$.workspaceName").value("Talon Demo"))
         .andExpect(jsonPath("$.role").value("WORKSPACE_ADMIN"));
   }
 
@@ -96,11 +98,13 @@ class AuthControllerTests {
                                 token
                                     .subject(USER_ID.toString())
                                     .claim("workspace_id", WORKSPACE_ID.toString())
+                                    .claim("workspace_name", "Talon Demo")
                                     .claim("role", "WORKSPACE_ADMIN")
                                     .claim("display_name", "Vraj"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.userId").value(USER_ID.toString()))
         .andExpect(jsonPath("$.workspaceId").value(WORKSPACE_ID.toString()))
+        .andExpect(jsonPath("$.workspaceName").value("Talon Demo"))
         .andExpect(jsonPath("$.role").value("WORKSPACE_ADMIN"))
         .andExpect(jsonPath("$.displayName").value("Vraj"));
   }

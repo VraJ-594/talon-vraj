@@ -3,13 +3,13 @@ package com.talon.ats.identity.infrastructure.persistence;
 import com.talon.ats.identity.application.AuthenticationAccount;
 import com.talon.ats.identity.application.IdentityAccountStore;
 import com.talon.ats.identity.application.IdentityWorkspaceBootstrapStore;
+import com.talon.ats.identity.contract.WorkspaceRole;
 import com.talon.ats.identity.domain.AppUser;
 import com.talon.ats.identity.domain.AppUserStatus;
 import com.talon.ats.identity.domain.RefreshSession;
 import com.talon.ats.identity.domain.WorkspaceBootstrap;
 import com.talon.ats.identity.domain.WorkspaceMembership;
 import com.talon.ats.identity.domain.WorkspaceMembershipStatus;
-import com.talon.ats.identity.domain.WorkspaceRole;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -27,10 +27,12 @@ public final class JdbcIdentityAccountStore
 
   private static final String ACCOUNT_SQL =
       """
-      SELECT id, email, normalized_email, display_name, password_hash, status,
-             default_workspace_id, created_at, last_login_at
-      FROM app_user
-      WHERE normalized_email = ?
+      SELECT app.id, app.email, app.normalized_email, app.display_name, app.password_hash,
+             app.status, app.default_workspace_id, app.created_at, app.last_login_at,
+             workspace.name AS workspace_name
+      FROM app_user app
+      LEFT JOIN workspace ON workspace.id = app.default_workspace_id
+      WHERE app.normalized_email = ?
       """;
 
   private static final String MEMBERSHIP_SQL =
@@ -70,7 +72,10 @@ public final class JdbcIdentityAccountStore
                       account.user().id());
               return memberships.stream()
                   .findFirst()
-                  .map(membership -> new AuthenticationAccount(account.user(), membership));
+                  .map(
+                      membership ->
+                          new AuthenticationAccount(
+                              account.user(), membership, account.workspaceName()));
             });
     return result == null ? Optional.empty() : result;
   }
@@ -205,7 +210,7 @@ public final class JdbcIdentityAccountStore
             AppUserStatus.valueOf(resultSet.getString("status")),
             instant(resultSet, "created_at"),
             instant(resultSet, "last_login_at"));
-    return new AccountWorkspace(user, workspaceId);
+    return new AccountWorkspace(user, workspaceId, resultSet.getString("workspace_name"));
   }
 
   private static WorkspaceMembership mapMembership(ResultSet resultSet, int rowNumber)
@@ -229,5 +234,5 @@ public final class JdbcIdentityAccountStore
     return value == null ? null : Timestamp.from(value);
   }
 
-  private record AccountWorkspace(AppUser user, UUID workspaceId) {}
+  private record AccountWorkspace(AppUser user, UUID workspaceId, String workspaceName) {}
 }

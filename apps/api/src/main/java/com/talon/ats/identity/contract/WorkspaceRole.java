@@ -1,4 +1,4 @@
-package com.talon.ats.identity.domain;
+package com.talon.ats.identity.contract;
 
 public enum WorkspaceRole {
   WORKSPACE_ADMIN,

@@ -51,6 +51,7 @@ public final class JwtTokenIssuer implements TokenIssuer {
             .issuedAt(claims.issuedAt())
             .expiresAt(claims.expiresAt())
             .claim("workspace_id", claims.workspaceId().toString())
+            .claim("workspace_name", claims.workspaceName())
             .claim("role", claims.role().name())
             .claim("display_name", claims.displayName())
             .build();

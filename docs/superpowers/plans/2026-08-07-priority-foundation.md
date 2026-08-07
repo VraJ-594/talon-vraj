@@ -120,7 +120,7 @@
 - Produces: tenant-safe repositories and minimal job/candidate/application facades used by later plans.
 
 - [ ] Write Testcontainers tests for migration, normalized account uniqueness, refresh revocation, candidate-email uniqueness, one application per job, missing/wrong/correct RLS context, and compensation minor-unit checks.
-- [ ] Confirm tests fail before the migration/adapters exist.
-- [ ] Implement forward migration, RLS policies, tenant transaction context, and repository adapters.
+- [x] Confirm tests fail before the migration/adapters exist.
+- [x] Implement forward migration, RLS policies, tenant transaction context, and repository adapters.
 - [ ] Run integration tests with Docker, then all Maven tests.
 - [ ] Update the handoff and commit `feat: add priority ATS persistence foundation`.
