@@ -46,9 +46,9 @@
 
 **Interfaces:** `ExternalFileSource.fetch(SourceReference, BoundedObjectSink)` returns metadata or stable source/file failure codes.
 
-- [ ] Test allowed link shapes, HTTPS/host/redirect/DNS rejection, auth interstitial, 429 Retry-After, permanent/transient classification, 10 MB streaming cutoff, PDF signature, rate 5/burst 5/concurrency 5.
-- [ ] Implement no-HTML-scraping anonymous fetch and bounded stream copy.
-- [ ] Run adapter tests/full verification and commit `feat: add rate limited public Drive PDF source`.
+- [x] Test allowed link shapes, HTTPS/host/redirect/DNS rejection, auth interstitial, 429 Retry-After, permanent/transient classification, 10 MB streaming cutoff, PDF signature, rate 5/burst 5/concurrency 5.
+- [x] Implement no-HTML-scraping anonymous fetch and bounded stream copy.
+- [x] Run adapter tests/full verification and commit `feat: add rate limited public Drive PDF source`.
 
 ### Task 4: Private object storage, quarantine, scan, and extraction
 

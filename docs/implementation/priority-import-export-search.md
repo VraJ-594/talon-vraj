@@ -100,6 +100,21 @@ the latest run.
 - Kept the parser behind `CsvApplicationParser`, so provider/library details do not leak into the
   import domain. The durable upload/preview HTTP endpoints remain in Task 5 because their job ID,
   mapping, preview, and retry behavior must be backed by PostgreSQL rather than an in-memory store.
+- Added the `ExternalFileSource`/`BoundedObjectSink` application boundary and an anonymous
+  `PublicGoogleDriveSource` adapter. It recognizes only the approved `drive.google.com/file/d`,
+  `open?id`, and `uc?id` share forms and converts them to the narrow anonymous download request;
+  it sends no OAuth credentials, cookies, confirmation token, or abuse-warning bypass flag.
+- Every initial request and redirect requires HTTPS, an allowlisted Google host, the default TLS
+  port, and public DNS results. Loopback, link-local, site-local, multicast, carrier-grade NAT,
+  documentation, benchmark, and other reserved destinations are rejected before HTTP access.
+- Drive responses are streamed through the caller-owned sink with a hard byte-counting limit.
+  Both `application/pdf` and `%PDF-` are required; HTML permission/confirmation pages, oversized
+  files, spoofed media, and unsupported statuses become stable failure codes. Retryable failures
+  carry explicit classification, and HTTP 429 preserves a valid `Retry-After` delay.
+- Added a generic, named `platform::rate-limiting` interface and configurable in-process
+  `LeakyBucket`. The approved defaults are represented by construction inputs: five starts per
+  second, burst capacity five, and five in flight. Fetch execution also has response and total
+  operation deadlines; interrupted/timed-out downloads release their concurrency permit.
 
 ## Why this approach
 
@@ -147,6 +162,8 @@ from becoming database instructions.
 - Import `domain` and `application` types plus `ImportMappingTests`.
 - Import CSV application contracts, `infrastructure/csv/CommonsCsvApplicationParser`, parser tests,
   and the Apache Commons CSV dependency in `apps/api/pom.xml`.
+- File-source application contracts and `files/infrastructure/drive` HTTP adapter.
+- Generic `platform/ratelimit` contract, `LeakyBucket`, named Modulith interface, and focused tests.
 - `AuthControllerTests`, `SecurityAdaptersTests`, `AuthenticationRuntimeConfigurationTests`,
   `DemoAdminProvisionerTests`, `PrioritySchemaMigrationIT`, `SupabaseSchemaSmokeIT`, and
   `SupabaseIdentityPersistenceIT`.
@@ -230,6 +247,16 @@ from becoming database instructions.
 - Current network-free full verification after import Task 2: `mvn ... spotless:apply verify` —
   build succeeded; 49 tests passed, the executable JAR was produced, and Spotless reported all 92
   Java files clean.
+- Drive-source red run failed at test compilation because the file-source, HTTP adapter, and limiter
+  contracts were absent. The initial focused green run passed 10/10 adapter/limiter tests.
+- A review regression test reproduced an HTTP-body read-after-close error; removing the redundant
+  post-copy read made that test pass while the counting stream continues to enforce the hard limit.
+- The first module-boundary run rejected the files module's dependency on internal platform types.
+  Exposing only `platform::rate-limiting` as a named interface made the focused source, limiter, and
+  architecture suite pass 13/13.
+- Current network-free full verification after import Task 3: `mvn ... spotless:apply verify` —
+  build succeeded; 61 tests passed, the executable JAR was produced, and Spotless reported all 109
+  Java files clean.
 
 ## Blockers, prerequisites, and exact next step
 
@@ -237,10 +264,10 @@ from becoming database instructions.
   unreachable from this shell, so V3 and the new job/candidate persistence integration tests remain
   pending. Local database, JWT, refresh-HMAC, and demo-login values remain in ignored files and were
   never committed.
-- AWS account, private S3/SQS resources, malware scanner choice, and a funded xAI key remain future
-  external prerequisites for the two priority features.
-- Exact next step: implement the anonymous public Google Drive PDF source behind
-  `ExternalFileSource`, including strict link/redirect validation, the 10 MB/PDF boundary, stable
-  transient/permanent failures, and the approved 5 starts/second, burst 5, maximum 5 in-flight
-  limiter. When the pooler is reachable, run the saved database-only `supabase-smoke` command to
-  apply V3 and close the persistence gate before wiring live frontend job/candidate HTTP gateways.
+- AWS account, private S3/SQS resources, malware scanner choice, a funded xAI key, and one synthetic
+  anonymously downloadable Drive PDF for a live provider smoke remain future external prerequisites.
+- Exact next step: implement the private object-storage/quarantine boundary, beginning with its
+  local filesystem adapter and security contract, then add the S3 implementation and Terraform
+  public-access assertions behind the same port. When the pooler is reachable, run the saved
+  database-only `supabase-smoke` command to apply V3 and close the persistence gate before wiring
+  live frontend job/candidate HTTP gateways.
