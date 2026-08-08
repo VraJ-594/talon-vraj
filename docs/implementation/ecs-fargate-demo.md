@@ -111,3 +111,8 @@ autoscaling, WAF, and production high availability.
 - CloudTrail then exposed the repository's customized ID-bound subject as
   `repo:VraJ-594@149707336/talon-vraj@1327513749:ref:refs/heads/main`. Bootstrap Terraform now models
   the immutable owner and repository IDs explicitly and retains the exact main-ref restriction.
+- GitHub Actions run `31258023949` completed successfully after the trust correction. OIDC assumed
+  the Terraform role without stored AWS keys, built/pushed both commit-tagged images, applied the
+  runtime, and waited for ECS stability. The live service reports one running task and no pending
+  task; both containers use tag `aafb5d5d609e768e5a86c0e7d1dd1f5c26a95ece`, the target is healthy,
+  and the ALB serves corrected bundle `index-CGwe3usB.js`.
