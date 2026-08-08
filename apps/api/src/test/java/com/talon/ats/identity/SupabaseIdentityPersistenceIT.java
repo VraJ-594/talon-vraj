@@ -125,6 +125,76 @@ class SupabaseIdentityPersistenceIT {
     }
   }
 
+  @Test
+  void rotatesARefreshSessionOnceAndRevokesTheFamilyOnReplay() {
+    TestDatabase database = database();
+    JdbcTemplate jdbc = database.jdbc();
+    JdbcIdentityAccountStore store = database.store();
+    UUID workspaceId = UUID.randomUUID();
+    UUID userId = UUID.randomUUID();
+    UUID originalSessionId = UUID.randomUUID();
+    UUID rotatedSessionId = UUID.randomUUID();
+    UUID familyId = UUID.randomUUID();
+    String originalHash = "hash-" + originalSessionId;
+    Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+
+    try {
+      seedAccount(
+          jdbc, workspaceId, userId, UUID.randomUUID(), "rotate-" + userId + "@example.invalid");
+      store.completeSuccessfulLogin(
+          new RefreshSession(
+              originalSessionId,
+              userId,
+              workspaceId,
+              originalHash,
+              familyId,
+              null,
+              now.plus(7, ChronoUnit.DAYS),
+              null,
+              null,
+              now),
+          now);
+
+      assertThat(
+              store.rotateRefreshSession(
+                  originalHash,
+                  rotatedSessionId,
+                  "hash-" + rotatedSessionId,
+                  now.plus(7, ChronoUnit.DAYS),
+                  now.plusSeconds(1)))
+          .isPresent();
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT used_at IS NOT NULL FROM refresh_session WHERE id = ?",
+                  Boolean.class,
+                  originalSessionId))
+          .isTrue();
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT parent_id FROM refresh_session WHERE id = ?",
+                  UUID.class,
+                  rotatedSessionId))
+          .isEqualTo(originalSessionId);
+
+      assertThat(
+              store.rotateRefreshSession(
+                  originalHash,
+                  UUID.randomUUID(),
+                  "unused-replay-hash",
+                  now.plus(7, ChronoUnit.DAYS),
+                  now.plusSeconds(2)))
+          .isEmpty();
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM refresh_session WHERE family_id = ? AND revoked_at IS NOT NULL",
+                  Integer.class,
+                  familyId))
+          .isEqualTo(2);
+    } finally {
+      cleanup(jdbc, userId, workspaceId);
+    }
+  }
+
   private static TestDatabase database() {
     Map<String, String> environment = System.getenv();
     DriverManagerDataSource dataSource =

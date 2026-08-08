@@ -1,26 +1,23 @@
 import { BriefcaseBusiness, FileCheck2, MapPin } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 
 import type { WorkspaceRole } from '../auth/authGateway';
 import type {
   AnnualCompensation,
-  CandidateApplicationDetail,
   CandidateApplicationSummary,
   CandidateGateway,
   ResumeFileStatus,
 } from './candidateGateway';
 import { CandidateGatewayError } from './candidateGateway';
-import { CandidateProfilePanel } from './CandidateProfilePanel';
 
 const RESUME_STATUS_LABELS: Readonly<Record<ResumeFileStatus, string>> = {
-  FETCHING_RESUME: 'Resume fetching',
-  RESUME_QUARANTINED: 'Resume quarantined',
+  NO_RESUME: 'No resume uploaded',
+  QUARANTINED: 'Resume quarantined',
   SCAN_PENDING: 'Resume scan pending',
-  EXTRACTING_TEXT: 'Resume extracting text',
   CLEAN: 'Resume clean',
   FAILED: 'Resume failed',
-  UNSAFE_FILE: 'Resume unsafe',
+  UNSAFE: 'Resume unsafe',
 };
 
 function canViewCompensation(role: WorkspaceRole) {
@@ -56,16 +53,12 @@ function formatCompensation(value: AnnualCompensation) {
 function CandidateApplicationRow({
   application,
   compensationAccessAllowed,
-  expanded,
-  onOpen,
 }: {
   readonly application: CandidateApplicationSummary;
   readonly compensationAccessAllowed: boolean;
-  readonly expanded: boolean;
-  readonly onOpen: (trigger: HTMLButtonElement) => void;
 }) {
   const hasCompensation =
-    application.currentCompensation !== undefined && application.expectedCompensation !== undefined;
+    application.currentCompensation != null && application.expectedCompensation != null;
 
   return (
     <article className="candidate-application-row">
@@ -77,15 +70,12 @@ function CandidateApplicationRow({
             .join('')}
         </span>
         <div>
-          <button
-            type="button"
+          <Link
             aria-label={`Open ${application.candidateName} application`}
-            aria-expanded={expanded}
-            aria-controls={expanded ? 'candidate-profile-panel' : undefined}
-            onClick={(event) => onOpen(event.currentTarget)}
+            href={`/candidates/applications/${encodeURIComponent(application.applicationId)}`}
           >
             {application.candidateName}
-          </button>
+          </Link>
           <span>
             <MapPin aria-hidden="true" size={13} />
             {application.location}
@@ -150,22 +140,11 @@ export function CandidateWorkspace({
   const [applications, setApplications] = useState<readonly CandidateApplicationSummary[] | null>(
     null,
   );
-  const [selectedApplication, setSelectedApplication] = useState<CandidateApplicationDetail | null>(
-    null,
-  );
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
   const [loadError, setLoadError] = useState<'FORBIDDEN' | 'UNAVAILABLE' | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const [downloadState, setDownloadState] = useState<
-    'IDLE' | 'DOWNLOADING' | 'COMPLETE' | 'ERROR' | 'BLOCKED'
-  >('IDLE');
-  const [profileRequest, setProfileRequest] = useState<{
-    readonly applicationId: string;
-    readonly candidateName: string;
-    readonly status: 'LOADING' | 'ERROR';
-  } | null>(null);
-  const profileRequestSequence = useRef(0);
-  const downloadRequestSequence = useRef(0);
-  const profileTrigger = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -174,7 +153,10 @@ export function CandidateWorkspace({
     void candidateGateway
       .listApplications()
       .then((loaded) => {
-        if (active) setApplications(loaded);
+        if (active) {
+          setApplications(loaded.items);
+          setNextCursor(loaded.nextCursor);
+        }
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -189,65 +171,25 @@ export function CandidateWorkspace({
     };
   }, [candidateGateway, loadAttempt]);
 
-  async function openApplication(
-    applicationId: string,
-    candidateName: string,
-    trigger?: HTMLButtonElement,
-  ) {
-    if (trigger) profileTrigger.current = trigger;
-    const requestSequence = ++profileRequestSequence.current;
-    downloadRequestSequence.current += 1;
-    setSelectedApplication(null);
-    setDownloadState('IDLE');
-    setProfileRequest({ applicationId, candidateName, status: 'LOADING' });
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    setLoadMoreError(false);
     try {
-      const loaded = await candidateGateway.getApplication(applicationId);
-      if (requestSequence !== profileRequestSequence.current) return;
-      setSelectedApplication(loaded);
-      setProfileRequest(null);
+      const page = await candidateGateway.listApplications(nextCursor);
+      setApplications((current) => {
+        const existing = new Set((current ?? []).map((item) => item.applicationId));
+        return [
+          ...(current ?? []),
+          ...page.items.filter((item) => !existing.has(item.applicationId)),
+        ];
+      });
+      setNextCursor(page.nextCursor);
     } catch {
-      if (requestSequence !== profileRequestSequence.current) return;
-      setProfileRequest({ applicationId, candidateName, status: 'ERROR' });
+      setLoadMoreError(true);
+    } finally {
+      setLoadingMore(false);
     }
-  }
-
-  async function downloadResume() {
-    if (!selectedApplication) return;
-    const requestSequence = ++downloadRequestSequence.current;
-    const applicationId = selectedApplication.applicationId;
-    setDownloadState('DOWNLOADING');
-    try {
-      const file = await candidateGateway.downloadResume(applicationId);
-      if (requestSequence !== downloadRequestSequence.current) return;
-      if (typeof URL.createObjectURL === 'function') {
-        const objectUrl = URL.createObjectURL(file);
-        const link = document.createElement('a');
-        link.href = objectUrl;
-        link.download = selectedApplication.resumeFileName;
-        link.click();
-        URL.revokeObjectURL(objectUrl);
-      }
-      setDownloadState('COMPLETE');
-    } catch (error: unknown) {
-      if (requestSequence !== downloadRequestSequence.current) return;
-      setDownloadState(
-        error instanceof CandidateGatewayError &&
-          (error.code === 'RESUME_DOWNLOAD_FORBIDDEN' || error.code === 'RESUME_NOT_CLEAN')
-          ? 'BLOCKED'
-          : 'ERROR',
-      );
-    }
-  }
-
-  function closeApplication() {
-    const trigger = profileTrigger.current;
-    profileRequestSequence.current += 1;
-    downloadRequestSequence.current += 1;
-    setProfileRequest(null);
-    setSelectedApplication(null);
-    setDownloadState('IDLE');
-    profileTrigger.current = null;
-    queueMicrotask(() => trigger?.focus());
   }
 
   return (
@@ -302,57 +244,36 @@ export function CandidateWorkspace({
           </Link>
         </div>
       ) : (
-        <div
-          className="candidate-application-list"
-          role="region"
-          aria-label="Candidate application roster"
-          tabIndex={0}
-        >
-          {applications.map((application) => (
-            <CandidateApplicationRow
-              key={application.applicationId}
-              application={application}
-              compensationAccessAllowed={canViewCompensation(role)}
-              expanded={selectedApplication?.applicationId === application.applicationId}
-              onOpen={(trigger) =>
-                void openApplication(application.applicationId, application.candidateName, trigger)
-              }
-            />
-          ))}
-        </div>
-      )}
-      {profileRequest?.status === 'LOADING' ? (
-        <p className="candidate-state-card" role="status">
-          Loading {profileRequest.candidateName} profile…
-        </p>
-      ) : profileRequest?.status === 'ERROR' ? (
-        <div
-          className="candidate-state-card error-state"
-          role="alert"
-          aria-label="Candidate profile could not be loaded."
-        >
-          <h3>Candidate profile could not be loaded.</h3>
-          <p>Try the selected application again.</p>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() =>
-              void openApplication(profileRequest.applicationId, profileRequest.candidateName)
-            }
+        <>
+          <div
+            className="candidate-application-list"
+            role="region"
+            aria-label="Candidate application roster"
+            tabIndex={0}
           >
-            Retry candidate profile
-          </button>
-        </div>
-      ) : null}
-      {selectedApplication ? (
-        <CandidateProfilePanel
-          application={selectedApplication}
-          role={role}
-          onClose={closeApplication}
-          onDownloadResume={() => void downloadResume()}
-          downloadState={downloadState}
-        />
-      ) : null}
+            {applications.map((application) => (
+              <CandidateApplicationRow
+                key={application.applicationId}
+                application={application}
+                compensationAccessAllowed={canViewCompensation(role)}
+              />
+            ))}
+          </div>
+          {nextCursor ? (
+            <div className="candidate-pagination">
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={loadingMore}
+                onClick={() => void loadMore()}
+              >
+                {loadingMore ? 'Loading more…' : 'Load more applications'}
+              </button>
+              {loadMoreError ? <p role="alert">More applications could not be loaded.</p> : null}
+            </div>
+          ) : null}
+        </>
+      )}
     </section>
   );
 }

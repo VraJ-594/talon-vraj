@@ -9,6 +9,35 @@ import { createFixtureJobGateway } from '../jobs/fixtureJobGateway';
 import { SignInPage } from './SignInPage';
 
 describe('authentication routing', () => {
+  it('renders a cached current-tab session immediately on refresh', () => {
+    const cachedSession: AuthenticatedSession = {
+      userId: 'user-demo-admin',
+      workspaceId: 'workspace-talon-demo',
+      displayName: 'Maya Reyes',
+      workspaceName: 'Talon Demo',
+      role: 'WORKSPACE_ADMIN',
+    };
+    window.history.replaceState({}, '', '/candidates');
+
+    render(
+      <App
+        authGateway={{
+          cachedSession: () => cachedSession,
+          login: async () => {
+            throw new Error('Login is not used while restoring this route');
+          },
+          logout: async () => undefined,
+          restoreSession: async () => new Promise<AuthenticatedSession>(() => undefined),
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Candidates' })).toBeInTheDocument();
+    expect(screen.queryByRole('main', { name: 'Restoring session' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Welcome back' })).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe('/candidates');
+  });
+
   it('redirects an unauthenticated candidate route visit to sign in', async () => {
     window.history.replaceState({}, '', '/candidates');
 

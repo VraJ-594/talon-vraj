@@ -1,6 +1,6 @@
 # Priority Frontend Workstream Handoff
 
-- Status: Authentication plus CSV preview/confirmation/progress HTTP integration implemented; automated gates green
+- Status: Current-tab refresh persistence plus CSV preview/confirmation/progress HTTP integration implemented; focused auth gates green, manual check ready
 - Branch/worktree: integrated into `codex/backend-api`; source checkpoint retained on `codex/frontend-web`
 - Scope: Priority frontend workflows defined by `docs/prompts/frontend-parallel-session.md`
 - Updated: 2026-08-08
@@ -12,15 +12,22 @@ one in-memory `ApiClient` across authentication, jobs, and imports. Authenticate
 real importable jobs, download the backend template, upload a strict Talon CSV, review the detected
 read-only mapping, validate rows, and restore the durable preview by opaque import ID. Fixture mode
 remains an explicit development opt-in. The backend now processes confirmed rows, while candidate
-review still uses its fixture gateway and export/search remain unimplemented.
+review still uses its fixture gateway. Search work exists in the shared checkout and is outside this
+authentication checkpoint; export remains incomplete.
 
-The HTTP gateway red test first failed because the gateway and central API client did not exist. The implemented gateway validates the backend's flat login/session responses, retains the bearer token only in the API client instance, includes credentials for the backend-set HttpOnly refresh cookie, maps stable RFC 9457 codes, and treats malformed success payloads as unavailable. A second red/green cycle proves fixture auth cannot activate in production. A live Chrome form-submit smoke then exposed a browser-only `Illegal invocation`: `ApiClient` called the injected native `fetch` as an object method, rebinding its receiver and preventing any request from leaving the browser. A focused regression test failed with the same error before the client detached the fetcher for invocation. The clean-browser rerun observed login HTTP 200 and navigation to `/candidates`. Automated formatting, lint, 73 tests, and the production build are green.
+The HTTP gateway validates the backend's flat login/refresh responses, maps stable safe problem
+codes, and treats malformed success payloads as unavailable. Login stores the validated session,
+access JWT, and expiry in `sessionStorage` so the same tab can render its protected route immediately
+after refresh; `localStorage` remains unused. Closing the browser session removes that state. The
+HttpOnly refresh cookie remains a fallback when tab storage is absent. Logout calls server revocation
+and clears both the API client and current-tab storage. Focused auth suites pass 31/31; the user
+requested the remaining browser flow be verified manually.
 
 The sign-in page's isolated console 404 was traced to the browser's implicit `/favicon.ico` request: the document did not declare a favicon. The document now references an SVG derived from the existing Talon brand mark, and both the live development response and production artifact contain the icon.
 
 HTTP mode now sends an idempotent confirmation key and polls durable import progress. Retry and error
 CSV actions remain unavailable because those backend endpoints do not yet exist. Formatting, lint,
-all 73 tests, and the production build pass.
+all 78 tests, and the production build pass.
 
 ## What changed
 
@@ -31,7 +38,9 @@ all 73 tests, and the production build pass.
 - Added a central `ApiClient` that owns the in-memory bearer token, applies authorization headers outside presentation components, and uses `credentials: 'include'` without reading the refresh cookie.
 - Fixed browser-native `fetch` invocation by calling the injected fetcher without rebinding it to the `ApiClient` instance; this removes the pre-network `Illegal invocation` that the sign-in UI safely surfaced as `API_UNAVAILABLE`.
 - Added `HttpAuthGateway` for `POST /api/v1/auth/login` and bearer-authenticated `GET /api/v1/session`, including strict response mapping and safe RFC 9457 problem-code handling.
-- Kept basic-checkpoint logout local: it clears the in-memory token/session and performs no deferred server logout or refresh rotation.
+- Added immediate current-tab restoration from validated `sessionStorage`, cookie-backed fallback
+  restoration, and server logout. A rejected/absent cookie becomes a normal signed-out result;
+  network failures remain distinguishable as `API_UNAVAILABLE`.
 - Changed runtime auth to HTTP by default. Fixture auth requires `VITE_AUTH_MODE=fixture` and is ignored in production builds.
 - Added a Vite `/api` development proxy to `http://localhost:8080`; `VITE_API_BASE_URL` remains available for deployments that use a configured API origin.
 - Removed the synthetic demo email and workspace copy from the runtime sign-in screen; the production bundle contains no auth-fixture identity markers.
@@ -80,7 +89,13 @@ all 73 tests, and the production build pass.
 
 ## Why this approach
 
-Authentication remains behind the frontend-owned port, but the default runtime adapter now calls the application-owned backend identity module. A central client owns bearer propagation so components never receive tokens or `fetch`; the backend-set refresh cookie stays opaque to JavaScript. Session/token state exists only in memory, so a browser reload deliberately returns to sign-in until refresh rotation is implemented. The fixture adapter remains useful for tests and explicit local UI-only work without becoming a production fallback.
+Authentication remains behind the frontend-owned port, and the default runtime adapter calls the
+application-owned backend identity module. A central client owns bearer propagation so components
+never receive tokens or `fetch`; the backend-set refresh cookie stays opaque to JavaScript. The
+approved demo trade-off stores the access JWT and validated session in tab-scoped `sessionStorage`
+for synchronous refresh rendering, while the rotating cookie remains the fallback. The fixture
+adapter remains useful for tests and explicit local UI-only work without becoming a production
+fallback.
 
 The route registry is an allowlist rather than an arbitrary post-login redirect. This preserves the requested priority destination while preventing open redirect behavior. Navigation excludes every deferred module so the shell describes the product currently being built rather than presenting dead links.
 
@@ -236,16 +251,25 @@ The candidate composition extends the existing Talon visual language: an operati
 | Final `npm run lint:web` after browser fix | Passed with zero warnings/errors. |
 | Final `npm run test:web` after browser fix | Passed: 11 files, 73 tests, 0 failures. |
 | Final `npm run build:web` after browser fix | Passed: TypeScript and Vite production build; 1,690 modules transformed. |
+| Browser-session refresh checkpoint | Focused auth suites passed 29/29; full lint passed, full Vitest passed 78/78, and the Vite production build passed with 1,699 modules transformed. API health and the frontend returned success after the refresh-enabled JAR restart. |
+| Current-tab immediate refresh checkpoint | Focused `AuthFlow` and `HttpAuthGateway` suites passed 31/31. Frontend returned HTTP 200 on port 5173; rebuilt API returned `UP` on port 8080. Manual sign-in/refresh/logout/tab-close verification was deliberately left to the user. |
 
 ## Integration status
 
 - Authentication integration: `HttpAuthGateway` implements the confirmed login/session contract and is the default runtime adapter. Automated contract coverage and a clean-browser login/session smoke are green.
-- Session storage: access token and session remain in object/component memory only. No token or identity enters `localStorage` or `sessionStorage`; the refresh cookie is backend-set HttpOnly state and is never read by frontend code. The user manually confirmed both browser storage areas remain empty after login.
-- Refresh limitation: refresh rotation and server logout are deliberately deferred. Local logout clears memory and returns to sign-in; a full browser reload also requires sign-in again.
-- Backend API integration: authentication only. Candidate, job, import, resume, and export runtime adapters remain typed fixtures.
+- Session storage: the validated access token, expiry, and session projection are stored in
+  `sessionStorage` for the approved current-tab refresh behavior. `localStorage` remains unused;
+  logout clears tab state, and normal browser-session closure discards it. The opaque refresh cookie
+  remains HttpOnly and is never read by frontend code.
+- Refresh behavior: a missing in-memory JWT triggers cookie-backed rotation; a rejected cookie returns
+  signed out, while network failure maps to `API_UNAVAILABLE`. Server logout revokes the token family
+  and expires the cookie before frontend memory is cleared.
+- Backend API integration: authentication, job selection, import upload/preview/confirmation/progress,
+  and the current search work use HTTP adapters. Candidate review and export are not yet fully wired.
 - Demo identity: real demo credentials remain only in ignored backend environment files. The synthetic `admin@talon.demo` adapter is limited to tests or explicit `VITE_AUTH_MODE=fixture` development sessions.
 - Visual review: all nine supplied PDF pages were inspected as design input. The user approved the completed sign-in, protected shell, `/imports`, and candidate-review workflow in the local Vite session; browser automation remains unavailable for screenshot evidence.
-- Job/import integration: typed fixtures only. No real CSV, Drive, queue, storage, or candidate API is called.
+- Job/import integration: normal HTTP mode uses real backend job/import endpoints; fixture mode remains
+  explicit. Candidate review still uses its gateway fixture.
 - Fixture persistence: safe runtime metadata is keyed by opaque import ID, and the documented fixture route restores a deterministic synthetic status. Real durability must come from backend import records; candidate values are not stored in browser storage.
 - Checkpoint 1 visual review: user-approved locally on 2026-08-07.
 - Checkpoint 2 visual review: user-approved locally on 2026-08-07.
@@ -269,7 +293,9 @@ requests for subsequent checkpoints.
 
 ### `POST /api/v1/auth/refresh`
 
-- Deferred from this basic-auth checkpoint. No frontend refresh request is made, and no refresh token enters JSON or frontend storage.
+- Consumes only the opaque `talon_refresh` cookie and returns the same flat access/session projection
+  as login plus a rotated browser-session cookie. The frontend never reads or stores the refresh
+  token. HTTP 401 restores a signed-out state; other failures use safe problem mapping.
 
 ### `GET /api/v1/session`
 
@@ -279,7 +305,8 @@ requests for subsequent checkpoints.
 
 ### `POST /api/v1/auth/logout`
 
-- Deferred with refresh rotation. Current `logout()` performs no server call; it clears the in-memory access token/session locally.
+- Revokes the refresh-token family when a cookie exists, returns HTTP 204, and expires the cookie.
+  The frontend clears its in-memory access JWT/session after the server response.
 
 ### Problem response vocabulary
 
@@ -327,8 +354,8 @@ requests for subsequent checkpoints.
 ## Blockers and exact next step
 
 - Automated screenshot comparison remains unavailable because browser discovery returned no available browser instances; user-driven visual review is the available evidence.
-- Browser login, bearer-session E2E, and manual browser-storage inspection are complete. Manual logout remains the final useful user check; refresh rotation is still deferred by design.
-- Refresh rotation and server logout remain known deferred behavior; browser reload requires a new sign-in.
+- Browser login and bearer-session evidence remain green. Automated refresh/logout coverage is green;
+  user manual login → `Ctrl+R` → logout confirmation is the remaining interaction check.
 - The earlier backend test-compilation claim about missing private-storage types is no longer current: those types and tests now exist, and the backend handoff records a green full Maven verification gate. A fresh API process is still required whenever backend runtime code changes.
 - Exact next step: replace `createFixtureCandidateGateway()` in normal runtime with a real candidate
   HTTP adapter after the backend exposes application roster/detail and authorized clean-resume

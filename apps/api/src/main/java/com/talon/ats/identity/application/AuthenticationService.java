@@ -103,6 +103,71 @@ public final class AuthenticationService {
         refreshExpiresAt);
   }
 
+  public AuthenticationResult refresh(String rawRefreshToken) {
+    if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
+      throw new RefreshSessionRejectedException();
+    }
+    Instant issuedAt = clock.instant();
+    Instant accessExpiresAt = issuedAt.plus(accessTokenLifetime);
+    Instant refreshExpiresAt = issuedAt.plus(refreshTokenLifetime);
+    String currentTokenHash =
+        requiredToken(tokenIssuer.hashRefreshToken(rawRefreshToken), "refresh token hash");
+    String nextRawRefreshToken = requiredToken(tokenIssuer.issueRefreshToken(), "refresh token");
+    String nextTokenHash =
+        requiredToken(tokenIssuer.hashRefreshToken(nextRawRefreshToken), "refresh token hash");
+    if (nextRawRefreshToken.equals(nextTokenHash)) {
+      throw new IllegalStateException("refresh token must be stored as a non-reversible hash");
+    }
+
+    AuthenticationAccount account =
+        accountStore
+            .rotateRefreshSession(
+                currentTokenHash, nextId(), nextTokenHash, refreshExpiresAt, issuedAt)
+            .filter(AuthenticationService::isActive)
+            .orElseThrow(RefreshSessionRejectedException::new);
+    String accessToken = issueAccessToken(account, issuedAt, accessExpiresAt);
+    return result(account, accessToken, accessExpiresAt, nextRawRefreshToken, refreshExpiresAt);
+  }
+
+  public void logout(String rawRefreshToken) {
+    if (rawRefreshToken == null || rawRefreshToken.isBlank()) return;
+    String tokenHash =
+        requiredToken(tokenIssuer.hashRefreshToken(rawRefreshToken), "refresh token hash");
+    accountStore.revokeRefreshSessionFamily(tokenHash, clock.instant());
+  }
+
+  private String issueAccessToken(
+      AuthenticationAccount account, Instant issuedAt, Instant accessExpiresAt) {
+    TokenIssuer.AccessTokenClaims claims =
+        new TokenIssuer.AccessTokenClaims(
+            account.user().id(),
+            account.membership().workspaceId(),
+            account.workspaceName(),
+            account.membership().role(),
+            account.user().displayName(),
+            issuedAt,
+            accessExpiresAt);
+    return requiredToken(tokenIssuer.issueAccessToken(claims), "access token");
+  }
+
+  private static AuthenticationResult result(
+      AuthenticationAccount account,
+      String accessToken,
+      Instant accessExpiresAt,
+      String rawRefreshToken,
+      Instant refreshExpiresAt) {
+    return new AuthenticationResult(
+        account.user().id(),
+        account.membership().workspaceId(),
+        account.workspaceName(),
+        account.membership().role(),
+        account.user().displayName(),
+        accessToken,
+        accessExpiresAt,
+        rawRefreshToken,
+        refreshExpiresAt);
+  }
+
   private static boolean isActive(AuthenticationAccount account) {
     return account != null
         && account.user().status() == AppUserStatus.ACTIVE

@@ -2,9 +2,15 @@ locals {
   state_bucket_name          = "talon-${var.environment}-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.region}-tfstate-vraj"
   candidate_files_bucket     = "talon-${var.environment}-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.region}-vraj"
   candidate_runtime_policy   = "talon-${var.environment}-candidate-file-runtime-vraj"
+  api_repository_name        = "talon-${var.environment}-api-vraj"
+  web_repository_name        = "talon-${var.environment}-web-vraj"
+  runtime_secret_name        = "talon-${var.environment}-runtime-vraj"
+  ecs_execution_role_name    = "talon-${var.environment}-ecs-execution-vraj"
+  ecs_application_role_name  = "talon-${var.environment}-ecs-application-vraj"
   github_actions_role_name   = "talon-${var.environment}-github-terraform-vraj"
   github_actions_policy_name = "talon-${var.environment}-terraform-permissions-vraj"
   state_key                  = "talon/${var.environment}/terraform.tfstate"
+  runtime_state_key          = "talon/${var.environment}/runtime/terraform.tfstate"
   github_subject             = "repo:${var.github_owner}/${var.github_repository}:ref:refs/heads/${var.github_branch}"
   github_oidc_provider_arn = coalesce(
     var.existing_github_oidc_provider_arn,
@@ -139,7 +145,9 @@ data "aws_iam_policy_document" "github_terraform" {
       variable = "s3:prefix"
       values = [
         local.state_key,
-        "${local.state_key}.tflock"
+        "${local.state_key}.tflock",
+        local.runtime_state_key,
+        "${local.runtime_state_key}.tflock"
       ]
     }
   }
@@ -152,14 +160,19 @@ data "aws_iam_policy_document" "github_terraform" {
     ]
     resources = [
       "${aws_s3_bucket.terraform_state.arn}/${local.state_key}",
-      "${aws_s3_bucket.terraform_state.arn}/${local.state_key}.tflock"
+      "${aws_s3_bucket.terraform_state.arn}/${local.state_key}.tflock",
+      "${aws_s3_bucket.terraform_state.arn}/${local.runtime_state_key}",
+      "${aws_s3_bucket.terraform_state.arn}/${local.runtime_state_key}.tflock"
     ]
   }
 
   statement {
-    sid       = "DeleteLockOnly"
-    actions   = ["s3:DeleteObject"]
-    resources = ["${aws_s3_bucket.terraform_state.arn}/${local.state_key}.tflock"]
+    sid     = "DeleteLockOnly"
+    actions = ["s3:DeleteObject"]
+    resources = [
+      "${aws_s3_bucket.terraform_state.arn}/${local.state_key}.tflock",
+      "${aws_s3_bucket.terraform_state.arn}/${local.runtime_state_key}.tflock"
+    ]
   }
 
   statement {
@@ -189,6 +202,7 @@ data "aws_iam_policy_document" "github_terraform" {
       "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:policy/${local.candidate_runtime_policy}"
     ]
   }
+
 }
 
 resource "aws_iam_role_policy" "github_terraform" {

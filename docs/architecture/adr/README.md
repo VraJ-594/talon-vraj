@@ -22,6 +22,6 @@ ADRs capture decisions whose reversal changes system boundaries, security postur
 | [0006](./0006-supabase-hosted-postgresql.md) | Portable PostgreSQL hosted by Supabase | Accepted |
 | [0007](./0007-priority-slice-and-application-auth.md) | Narrow the active slice and use application-owned authentication | Accepted |
 | [0008](./0008-private-candidate-file-transfer.md) | Public Drive ingestion into private object storage | Accepted |
-| [0009](./0009-validated-dual-mode-search.md) | Deterministic search plus validated Grok interpretation | Accepted |
+| [0009](./0009-validated-dual-mode-search.md) | Deterministic search plus validated Groq interpretation | Accepted |
 
 New ADRs use the next four-digit number and include Context, Decision, and Consequences. Accepted ADRs are not rewritten to hide a superseded decision; a new ADR supersedes the old record.

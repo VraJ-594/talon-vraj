@@ -11,7 +11,7 @@ Deliver one production-oriented ATS slice that can be demonstrated end to end:
 3. previews and confirms a Google Form candidate CSV;
 4. required public Google Drive PDF resumes are validated and copied into private S3;
 5. imported candidates/applications can be listed, filtered, sorted, searched, and exported; and
-6. natural-language search is translated by Grok into a restricted backend-owned DSL.
+6. natural-language search is translated by Groq into a restricted backend-owned DSL.
 
 This slice deliberately favors complete behavior over broad screen coverage. Calendar, interviews,
 scorecards, offers, reports, notifications, editable Kanban, AI resume scoring, OAuth, 2FA, public
@@ -35,8 +35,8 @@ with the modular monolith and provider-port architecture.
 - Candidate files and CSV exports use private object storage. AWS S3 has Block Public Access, ACLs
   disabled, encryption, non-PII keys, least-privilege IAM, and five-minute authorized GET URLs.
 - Candidate export files contain no resume URL and expire after seven days.
-- Standard Cmd+K search is deterministic and never calls Grok. Natural-language search sends only
-  user query plus DSL schema to Grok; the backend validates the returned DSL before PostgreSQL.
+- Standard Cmd+K search is deterministic and never calls Groq. Natural-language search sends only
+  user query plus DSL schema to Groq; the backend validates the returned DSL before PostgreSQL.
 - Money is `currency` plus integer minor units. `40 LPA` means INR 4,000,000 annually, represented
   as 400,000,000 paise. No implicit currency conversion occurs.
 - Terraform uses variables and provider-owned identifiers so a new AWS account/region can be used
@@ -88,15 +88,15 @@ Gate: the full import and export workflow is replay-safe and never exposes a pub
 
 Detailed steps: [candidate search](../superpowers/plans/2026-08-07-candidate-search.md).
 
-- [ ] Define one typed search criteria model and allowlisted DSL shared by deterministic filters and
+- [x] Define one typed search criteria model and allowlisted DSL shared by deterministic filters and
   natural-language interpretation.
-- [ ] Implement PostgreSQL full-text/trigram candidate/application/resume-text search, filters,
+- [x] Implement PostgreSQL full-text/trigram candidate/application/resume-text search, filters,
   cursor pagination, and allowlisted sorting.
-- [ ] Implement Cmd+K without an AI call.
-- [ ] Implement Grok interpretation behind `NaturalLanguageQueryInterpreter`; send no candidate
+- [x] Implement Cmd+K without an AI call.
+- [x] Implement Groq interpretation behind `NaturalLanguageSearchInterpreter`; send no candidate
   records or SQL and validate every field/operator/value/sort before execution.
-- [ ] Return interpreted filter chips that the frontend can edit and resubmit deterministically.
-- [ ] Preserve deterministic search when Grok is disabled, unavailable, or returns invalid output.
+- [x] Return interpreted filter chips that the frontend can edit and resubmit deterministically.
+- [x] Preserve deterministic search when Groq is disabled, unavailable, or returns invalid output.
 
 Gate: `candidates with expected CTC < 40 LPA` produces validated INR criteria and correct results,
 while malformed/provider-failed interpretations cannot become SQL.
@@ -118,7 +118,7 @@ Gate: changing Terraform account/region/bucket names requires configuration only
   search → natural-language CTC search → export.
 - [ ] Record backend/frontend/build/IaC commands and observed results.
 - [ ] Record external prerequisites: Docker availability, AWS access, Supabase connection, S3/SQS
-  resources, malware scanner, and funded xAI key.
+  resources, malware scanner, and Groq key/quota.
 
 ## Parallel work
 

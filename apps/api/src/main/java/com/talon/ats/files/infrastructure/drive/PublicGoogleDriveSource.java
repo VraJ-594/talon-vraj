@@ -191,7 +191,9 @@ public final class PublicGoogleDriveSource implements ExternalFileSource {
       throw failure(
           "SOURCE_AUTH_REQUIRED", "Drive returned an authentication or confirmation page", false);
     }
-    if (!contentType.equals("application/pdf")) {
+    if (!contentType.equals("application/pdf")
+        && !contentType.equals("application/octet-stream")
+        && !contentType.equals("application/binary")) {
       throw failure("INVALID_FILE_TYPE", "Resume must be a PDF", false);
     }
     response

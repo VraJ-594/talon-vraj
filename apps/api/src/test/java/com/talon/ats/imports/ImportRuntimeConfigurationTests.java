@@ -51,6 +51,42 @@ class ImportRuntimeConfigurationTests {
           .withBean(ImportTargetAccess.class, () -> (workspaceId, jobId) -> true);
 
   @Test
+  void selectsPrivateS3StorageOnlyWhenBucketAndRegionAreConfigured() {
+    ObjectStorage expected = new LocalObjectStorage(Path.of("target", "s3-selection-sentinel"));
+    ObjectStorageFactory factory =
+        new ObjectStorageFactory() {
+          @Override
+          public ObjectStorage local(Path root) {
+            throw new AssertionError("local storage must not be selected");
+          }
+
+          @Override
+          public ObjectStorage s3(String bucket, String region) {
+            assertThat(bucket).isEqualTo("talon-resumes-demo-vraj");
+            assertThat(region).isEqualTo("ap-south-1");
+            return expected;
+          }
+        };
+
+    contextRunner
+        .withBean(
+            "s3StorageFactory",
+            ObjectStorageFactory.class,
+            () -> factory,
+            definition -> definition.setPrimary(true))
+        .withPropertyValues(
+            "talon.security.enabled=true",
+            "talon.files.provider=s3",
+            "talon.files.s3.bucket=talon-resumes-demo-vraj",
+            "talon.files.s3.region=ap-south-1")
+        .run(
+            context -> {
+              assertThat(context).hasNotFailed();
+              assertThat(context.getBean(ObjectStorage.class)).isSameAs(expected);
+            });
+  }
+
+  @Test
   void enablesTheCompleteLocalImportRuntimeOnlyWithSecurity() {
     String root = Path.of("target", "runtime-private-files").toAbsolutePath().toString();
     contextRunner
@@ -84,7 +120,7 @@ class ImportRuntimeConfigurationTests {
     contextRunner
         .withPropertyValues(
             "talon.security.enabled=true",
-            "talon.files.provider=s3",
+            "talon.files.provider=azure",
             "talon.files.local-root=target/runtime-private-files")
         .run(context -> assertThat(context).hasFailed());
   }

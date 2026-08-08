@@ -18,7 +18,7 @@ Git working tree
 ```
 
 Docker data may remain on the E drive. Java 21 is required. Local providers include private-object,
-Drive, scanner, queue, clock, and Grok fakes with contract-compatible behavior. Real credentials
+Drive, scanner, queue, clock, and Groq fakes with contract-compatible behavior. Real credentials
 belong in ignored local/runtime environment files.
 
 ## 3. Test layers
@@ -29,7 +29,7 @@ belong in ignored local/runtime environment files.
 - Database: Flyway on real PostgreSQL/Testcontainers, uniqueness/RLS, leasing/replay, query results
   and plans. H2 is not a substitute.
 - Adapter contract: JWT/BCrypt, Drive URL/network/download cases, scanner, S3/private signing, local
-  dispatcher/SQS, PDFBox, Grok structured output.
+  dispatcher/SQS, PDFBox, Groq structured output.
 - Frontend: Vitest/Testing Library for forms, mapping, progress, chips, sorting, and states.
 - E2E: Playwright through public UI/API with deterministic provider fakes; small real-provider smoke
   tests are separate and gated by credentials.
@@ -45,12 +45,12 @@ Behavior changes start with a failing test. Completion claims require fresh obse
 3. Download template, upload Google Form CSV, map columns, inspect validation/duplicate preview.
 4. Confirm and observe durable progress, row errors, and completion.
 5. Open imported candidate/application and obtain an authorized resume download.
-6. Use Cmd+K keyword search without Grok.
+6. Use Cmd+K keyword search without Groq.
 7. Interpret “candidates with expected CTC below 40 LPA,” inspect/edit chips, execute and sort.
 8. Request export, wait for completion, and download the private CSV.
 
 Add focused negative flows for invalid auth, cross-workspace IDs, non-public/oversized/non-PDF
-resume, import retry, Grok invalid/unavailable output, and expired/unauthorized downloads.
+resume, import retry, Groq invalid/unavailable output, and expired/unauthorized downloads.
 
 ## 5. Initial vertical-slice gate
 
@@ -75,7 +75,7 @@ Blocked real-provider checks are recorded, never presented as passing.
 - Login p95 target under 750 ms excluding deliberate BCrypt cost variability.
 - Accept 10 MB/2,000-row CSV without loading resumes/whole artifacts into memory.
 - Drive limiter defaults to five starts/sec, capacity five, five in flight; honor `Retry-After`.
-- Search limits predicates/page size/query length; Grok has short connect/read timeout and bounded
+- Search limits predicates/page size/query length; Groq has short connect/read timeout and bounded
   retry only for safe transient errors.
 - A worker/API restart must not lose confirmed imports/exports or duplicate applications.
 

@@ -5,8 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.talon.ats.candidates.application.ApplicationData;
 import com.talon.ats.candidates.application.CandidateApplicationCommand;
+import com.talon.ats.candidates.application.CandidateApplicationDetail;
 import com.talon.ats.candidates.application.CandidateApplicationResult;
+import com.talon.ats.candidates.application.CandidateApplicationSlice;
 import com.talon.ats.candidates.application.CandidateData;
+import com.talon.ats.candidates.application.CandidateResumeStatus;
+import com.talon.ats.candidates.infrastructure.persistence.JdbcCandidateApplicationQueryStore;
 import com.talon.ats.candidates.infrastructure.persistence.JdbcCandidateApplicationStore;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -64,7 +68,45 @@ class SupabaseCandidateApplicationPersistenceIT {
                   Long.class,
                   first.applicationId()))
           .isEqualTo(400_000_000L);
+
+      CandidateApplicationSlice page = database.queryStore().list(workspaceId, null, 25);
+      assertThat(page.items())
+          .singleElement()
+          .satisfies(
+              application -> {
+                assertThat(application.applicationId()).isEqualTo(first.applicationId());
+                assertThat(application.candidateName()).isEqualTo("Nila Raman");
+                assertThat(application.resumeStatus()).isEqualTo(CandidateResumeStatus.NO_RESUME);
+              });
+      assertThat(database.queryStore().list(UUID.randomUUID(), null, 25).items()).isEmpty();
+
+      CandidateApplicationDetail detail =
+          database.queryStore().findDetail(workspaceId, first.applicationId()).orElseThrow();
+      assertThat(detail.email()).isEqualTo("nila@example.com");
+      assertThat(detail.additionalAnswers()).containsEntry("preferredTeam", "Platform");
+
+      UUID fileId = UUID.randomUUID();
+      UUID versionId = UUID.randomUUID();
+      jdbc.update(
+          """
+          INSERT INTO candidate_file(
+              id, workspace_id, application_id, file_name, object_key,
+              status, content_type, size_bytes)
+          VALUES (?,?,?,?,?,'CLEAN','application/pdf',128)
+          """,
+          fileId,
+          workspaceId,
+          first.applicationId(),
+          "nila-resume.pdf",
+          "clean/" + workspaceId + "/resumes/" + fileId + "/" + versionId + ".pdf");
+      assertThat(database.queryStore().findCleanResume(workspaceId, first.applicationId()))
+          .hasValueSatisfying(
+              resume -> {
+                assertThat(resume.fileName()).isEqualTo("nila-resume.pdf");
+                assertThat(resume.objectKey().isCleanResume()).isTrue();
+              });
     } finally {
+      jdbc.update("DELETE FROM candidate_file WHERE workspace_id = ?", workspaceId);
       jdbc.update("DELETE FROM application WHERE workspace_id = ?", workspaceId);
       jdbc.update("DELETE FROM candidate WHERE workspace_id = ?", workspaceId);
       jdbc.update("DELETE FROM job WHERE workspace_id = ?", workspaceId);
@@ -125,12 +167,14 @@ class SupabaseCandidateApplicationPersistenceIT {
         .migrate();
     DriverManagerDataSource dataSource = new DriverManagerDataSource(url, username, password);
     JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+    TransactionTemplate transactions =
+        new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+    ObjectMapper objectMapper = new ObjectMapper();
     JdbcCandidateApplicationStore store =
-        new JdbcCandidateApplicationStore(
-            jdbc,
-            new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
-            new ObjectMapper());
-    return new TestDatabase(jdbc, store);
+        new JdbcCandidateApplicationStore(jdbc, transactions, objectMapper);
+    JdbcCandidateApplicationQueryStore queryStore =
+        new JdbcCandidateApplicationQueryStore(jdbc, transactions, objectMapper);
+    return new TestDatabase(jdbc, store, queryStore);
   }
 
   private static String required(Map<String, String> environment, String name) {
@@ -141,5 +185,8 @@ class SupabaseCandidateApplicationPersistenceIT {
     return value;
   }
 
-  private record TestDatabase(JdbcTemplate jdbc, JdbcCandidateApplicationStore store) {}
+  private record TestDatabase(
+      JdbcTemplate jdbc,
+      JdbcCandidateApplicationStore store,
+      JdbcCandidateApplicationQueryStore queryStore) {}
 }

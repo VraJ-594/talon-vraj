@@ -23,6 +23,8 @@ type LoginResponse = AuthenticatedSession & {
   readonly accessTokenExpiresAt: string;
 };
 
+const BROWSER_SESSION_KEY = 'talon.auth.session';
+
 function authProblem(code: AuthProblemCode): AuthProblem {
   return Object.assign(new Error('Authentication request could not be completed'), { code });
 }
@@ -127,7 +129,17 @@ async function responseProblem(
 export class HttpAuthGateway implements AuthGateway {
   private currentSession: AuthenticatedSession | null = null;
 
-  constructor(private readonly apiClient: ApiClient) {}
+  constructor(private readonly apiClient: ApiClient) {
+    const cached = this.readBrowserSession();
+    if (cached) {
+      this.apiClient.setAccessToken(cached.accessToken);
+      this.currentSession = readSession(cached);
+    }
+  }
+
+  cachedSession(): AuthenticatedSession | undefined {
+    return this.currentSession ?? undefined;
+  }
 
   async login(credentials: LoginCredentials): Promise<AuthenticatedSession> {
     let response: Response;
@@ -155,11 +167,14 @@ export class HttpAuthGateway implements AuthGateway {
       displayName: result.displayName,
     };
     this.currentSession = session;
+    this.writeBrowserSession(result);
     return session;
   }
 
   async restoreSession(): Promise<AuthenticatedSession | null> {
-    if (!this.apiClient.hasAccessToken()) return null;
+    if (!this.apiClient.hasAccessToken()) {
+      return this.refreshSession();
+    }
 
     let response: Response;
     try {
@@ -181,11 +196,76 @@ export class HttpAuthGateway implements AuthGateway {
   }
 
   async logout(): Promise<void> {
+    let response: Response;
+    try {
+      response = await this.apiClient.request('/api/v1/auth/logout', { method: 'POST' });
+    } catch {
+      this.clearSession();
+      throw authProblem('API_UNAVAILABLE');
+    }
+
     this.clearSession();
+    if (!response.ok) throw await responseProblem(response, 'SESSION');
+  }
+
+  private async refreshSession(): Promise<AuthenticatedSession | null> {
+    let response: Response;
+    try {
+      response = await this.apiClient.request('/api/v1/auth/refresh', { method: 'POST' });
+    } catch {
+      throw authProblem('API_UNAVAILABLE');
+    }
+
+    if (response.status === 401) {
+      this.clearSession();
+      return null;
+    }
+    if (!response.ok) throw await responseProblem(response, 'SESSION');
+
+    const result = readLoginResponse(await readJson(response));
+    if (!result) throw authProblem('API_UNAVAILABLE');
+    this.apiClient.setAccessToken(result.accessToken);
+    const session: AuthenticatedSession = {
+      userId: result.userId,
+      workspaceId: result.workspaceId,
+      workspaceName: result.workspaceName,
+      role: result.role,
+      displayName: result.displayName,
+    };
+    this.currentSession = session;
+    this.writeBrowserSession(result);
+    return session;
   }
 
   private clearSession() {
     this.apiClient.clearAccessToken();
     this.currentSession = null;
+    try {
+      window.sessionStorage.removeItem(BROWSER_SESSION_KEY);
+    } catch {
+      // Browser privacy settings may disable storage; cookie restoration remains available.
+    }
+  }
+
+  private readBrowserSession(): LoginResponse | null {
+    try {
+      const raw = window.sessionStorage.getItem(BROWSER_SESSION_KEY);
+      const cached = raw ? readLoginResponse(JSON.parse(raw) as unknown) : null;
+      if (!cached || new Date(cached.accessTokenExpiresAt).getTime() <= Date.now()) {
+        window.sessionStorage.removeItem(BROWSER_SESSION_KEY);
+        return null;
+      }
+      return cached;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeBrowserSession(result: LoginResponse) {
+    try {
+      window.sessionStorage.setItem(BROWSER_SESSION_KEY, JSON.stringify(result));
+    } catch {
+      // The HttpOnly refresh cookie still restores sessions when storage is unavailable.
+    }
   }
 }

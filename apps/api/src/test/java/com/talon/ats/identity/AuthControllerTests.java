@@ -1,8 +1,10 @@
 package com.talon.ats.identity;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -16,8 +18,10 @@ import com.talon.ats.identity.api.AuthenticationExceptionHandler;
 import com.talon.ats.identity.application.AuthenticationFailedException;
 import com.talon.ats.identity.application.AuthenticationResult;
 import com.talon.ats.identity.application.AuthenticationService;
+import com.talon.ats.identity.application.RefreshSessionRejectedException;
 import com.talon.ats.identity.infrastructure.security.SecurityConfiguration;
 import com.talon.ats.platform.health.HealthController;
+import jakarta.servlet.http.Cookie;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -74,11 +78,61 @@ class AuthControllerTests {
         .andExpect(header().string("Set-Cookie", containsString("HttpOnly")))
         .andExpect(header().string("Set-Cookie", containsString("Secure")))
         .andExpect(header().string("Set-Cookie", containsString("SameSite=Strict")))
+        .andExpect(header().string("Set-Cookie", not(containsString("Max-Age"))))
+        .andExpect(header().string("Set-Cookie", not(containsString("Expires"))))
         .andExpect(jsonPath("$.accessToken").value("access-token"))
         .andExpect(jsonPath("$.refreshToken").doesNotExist())
         .andExpect(jsonPath("$.workspaceId").value(WORKSPACE_ID.toString()))
         .andExpect(jsonPath("$.workspaceName").value("Talon Demo"))
         .andExpect(jsonPath("$.role").value("WORKSPACE_ADMIN"));
+  }
+
+  @Test
+  void refreshIsPublicRotatesTheSessionCookieAndReturnsANewAccessToken() throws Exception {
+    given(authenticationService.refresh("current-refresh-token"))
+        .willReturn(authenticationResult("rotated-access-token", "rotated-refresh-token"));
+
+    mockMvc
+        .perform(
+            post("/api/v1/auth/refresh")
+                .cookie(new Cookie("talon_refresh", "current-refresh-token")))
+        .andExpect(status().isOk())
+        .andExpect(
+            header().string("Set-Cookie", containsString("talon_refresh=rotated-refresh-token")))
+        .andExpect(header().string("Set-Cookie", containsString("HttpOnly")))
+        .andExpect(header().string("Set-Cookie", containsString("Secure")))
+        .andExpect(header().string("Set-Cookie", containsString("SameSite=Strict")))
+        .andExpect(header().string("Set-Cookie", not(containsString("Max-Age"))))
+        .andExpect(jsonPath("$.accessToken").value("rotated-access-token"))
+        .andExpect(jsonPath("$.refreshToken").doesNotExist());
+  }
+
+  @Test
+  void missingRefreshCookieReturnsSafeSessionExpiredProblem() throws Exception {
+    given(authenticationService.refresh(null)).willThrow(new RefreshSessionRejectedException());
+
+    mockMvc
+        .perform(post("/api/v1/auth/refresh"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.code").value("SESSION_EXPIRED"))
+        .andExpect(jsonPath("$.detail").value("Session is unavailable"));
+  }
+
+  @Test
+  void logoutIsPublicRevokesWhenPresentAndAlwaysClearsTheCookie() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/auth/logout")
+                .cookie(new Cookie("talon_refresh", "current-refresh-token")))
+        .andExpect(status().isNoContent())
+        .andExpect(header().string("Set-Cookie", containsString("talon_refresh=")))
+        .andExpect(header().string("Set-Cookie", containsString("Max-Age=0")))
+        .andExpect(header().string("Set-Cookie", containsString("HttpOnly")))
+        .andExpect(header().string("Set-Cookie", containsString("Secure")))
+        .andExpect(header().string("Set-Cookie", containsString("SameSite=Strict")));
+
+    verify(authenticationService).logout("current-refresh-token");
   }
 
   @Test
@@ -125,5 +179,19 @@ class AuthControllerTests {
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
         .andExpect(jsonPath("$.detail").value("Invalid email or password"));
+  }
+
+  private static AuthenticationResult authenticationResult(
+      String accessToken, String refreshToken) {
+    return new AuthenticationResult(
+        USER_ID,
+        WORKSPACE_ID,
+        "Talon Demo",
+        com.talon.ats.identity.contract.WorkspaceRole.WORKSPACE_ADMIN,
+        "Vraj",
+        accessToken,
+        Instant.parse("2026-08-07T10:15:00Z"),
+        refreshToken,
+        Instant.parse("2026-08-14T10:00:00Z"));
   }
 }

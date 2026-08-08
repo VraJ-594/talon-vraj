@@ -31,8 +31,8 @@ Open `architecture.html` for a browser-friendly index. Each figure names the cor
 - Durable PostgreSQL jobs/outbox plus a local dispatcher or SQS for retryable work.
 - AWS ECS Fargate as the initial container runtime.
 - Application-owned basic authentication for the priority slice; advanced auth is deferred.
-- Provider ports for Drive resume source, private object storage, scanner, queue, and Grok query interpretation.
-- Deterministic Cmd+K plus validated Grok-to-DSL natural-language search; no AI resume scoring.
+- Provider ports for Drive resume source, private object storage, scanner, queue, and Groq query interpretation.
+- Deterministic Cmd+K plus validated Groq-to-DSL natural-language search; no AI resume scoring.
 - Parameterized AWS account and region, with local Docker Compose development.
 
 The active delivery order is intentionally limited to authentication, CSV/Drive/private-S3

@@ -1,4 +1,4 @@
-name: Apply development Terraform
+name: Deploy Talon development demo
 
 on:
   push:
@@ -6,7 +6,11 @@ on:
       - main
     paths:
       - '.github/workflows/terraform-apply.yml'
+      - 'apps/api/**'
+      - 'apps/web/**'
       - 'infra/terraform/**'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
 
 permissions:
@@ -14,26 +18,55 @@ permissions:
   id-token: write
 
 concurrency:
-  group: talon-development-terraform-vraj
+  group: talon-development-deploy-vraj
   cancel-in-progress: false
 
 jobs:
-  apply:
-    name: Validate, plan, and apply
+  deploy:
+    name: Verify, build, and deploy
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: development
     defaults:
       run:
         shell: bash
-        working-directory: infra/terraform/environments/dev
     steps:
       - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Install Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
 
       - name: Install Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_version: 1.15.8
+
+      - name: Verify backend
+        run: mvn -B -f apps/api/pom.xml verify
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Verify frontend
+        run: |
+          npm run lint:web
+          npm run test:web
+          npm run build:web
+
+      - name: Verify same-task proxy contract
+        shell: pwsh
+        run: ./scripts/verify-nginx-ecs-contract.ps1
 
       - name: Configure short-lived AWS credentials
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
@@ -42,11 +75,11 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
           mask-aws-account-id: true
 
-      - name: Check formatting
-        working-directory: .
+      - name: Check Terraform formatting
         run: terraform fmt -check -recursive infra/terraform
 
-      - name: Initialize remote state
+      - name: Initialize foundation state
+        working-directory: infra/terraform/environments/dev
         run: >-
           terraform init -input=false
           -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
@@ -55,11 +88,75 @@ jobs:
           -backend-config="encrypt=true"
           -backend-config="use_lockfile=true"
 
-      - name: Validate configuration
-        run: terraform validate
+      - name: Validate and apply foundation
+        working-directory: infra/terraform/environments/dev
+        run: |
+          terraform validate
+          terraform plan -input=false -out=foundation.tfplan -var="aws_region=${{ vars.AWS_REGION }}"
+          terraform apply -input=false -auto-approve foundation.tfplan
 
-      - name: Create reviewed plan artifact
-        run: terraform plan -input=false -out=dev.tfplan -var="aws_region=${{ vars.AWS_REGION }}"
+      - name: Confirm runtime secret is populated
+        run: >-
+          aws secretsmanager describe-secret
+          --secret-id talon-dev-runtime-vraj
+          --query 'VersionIdsToStages'
+          --output json
+          | jq -e 'to_entries | any(.value | index("AWSCURRENT"))'
 
-      - name: Apply exact plan
-        run: terraform apply -input=false -auto-approve dev.tfplan
+      - name: Resolve immutable repository URLs
+        id: repositories
+        working-directory: infra/terraform/environments/dev
+        run: |
+          echo "api=$(terraform output -raw api_repository_url)" >> "$GITHUB_OUTPUT"
+          echo "web=$(terraform output -raw web_repository_url)" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate Docker to ECR
+        env:
+          API_REPOSITORY: ${{ steps.repositories.outputs.api }}
+        run: |
+          registry="${API_REPOSITORY%%/*}"
+          aws ecr get-login-password --region "${{ vars.AWS_REGION }}" \
+            | docker login --username AWS --password-stdin "$registry"
+
+      - name: Build and push immutable images
+        env:
+          API_REPOSITORY: ${{ steps.repositories.outputs.api }}
+          WEB_REPOSITORY: ${{ steps.repositories.outputs.web }}
+        run: |
+          api_image="${API_REPOSITORY}:${GITHUB_SHA}"
+          web_image="${WEB_REPOSITORY}:${GITHUB_SHA}"
+          docker build --file apps/api/Dockerfile --tag "$api_image" .
+          docker build --file apps/web/Dockerfile --tag "$web_image" .
+          docker push "$api_image"
+          docker push "$web_image"
+
+      - name: Initialize runtime state
+        working-directory: infra/terraform/environments/dev-runtime
+        run: >-
+          terraform init -input=false
+          -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          -backend-config="key=talon/dev/runtime/terraform.tfstate"
+          -backend-config="region=${{ vars.AWS_REGION }}"
+          -backend-config="encrypt=true"
+          -backend-config="use_lockfile=true"
+
+      - name: Validate, plan, and apply runtime
+        working-directory: infra/terraform/environments/dev-runtime
+        env:
+          TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+          TF_VAR_state_bucket_name: ${{ vars.TF_STATE_BUCKET }}
+          TF_VAR_allowed_demo_cidrs: ${{ vars.DEMO_INGRESS_CIDRS }}
+          TF_VAR_api_image_uri: ${{ steps.repositories.outputs.api }}:${{ github.sha }}
+          TF_VAR_web_image_uri: ${{ steps.repositories.outputs.web }}:${{ github.sha }}
+        run: |
+          terraform validate
+          terraform plan -input=false -out=runtime.tfplan
+          terraform apply -input=false -auto-approve runtime.tfplan
+
+      - name: Wait for the single demo task
+        working-directory: infra/terraform/environments/dev-runtime
+        run: |
+          cluster="$(terraform output -raw ecs_cluster_name)"
+          service="$(terraform output -raw ecs_service_name)"
+          aws ecs wait services-stable --cluster "$cluster" --services "$service"
+          echo "Demo URL: $(terraform output -raw demo_url)"

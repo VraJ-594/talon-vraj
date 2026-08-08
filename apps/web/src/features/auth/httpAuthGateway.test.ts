@@ -10,7 +10,7 @@ const LOGIN_RESPONSE = {
   role: 'WORKSPACE_ADMIN',
   displayName: 'Maya Reyes',
   accessToken: 'header.payload.signature',
-  accessTokenExpiresAt: '2026-08-08T01:15:00Z',
+  accessTokenExpiresAt: '2026-08-09T01:15:00Z',
 } as const;
 
 const SESSION_RESPONSE = {
@@ -57,14 +57,30 @@ describe('HttpAuthGateway', () => {
       }),
     );
     expect(window.localStorage).toHaveLength(0);
-    expect(window.sessionStorage).toHaveLength(0);
+    expect(window.sessionStorage).toHaveLength(1);
+  });
+
+  it('hydrates the active tab synchronously after a page refresh', async () => {
+    const loginFetcher = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(LOGIN_RESPONSE));
+    await new HttpAuthGateway(new ApiClient('', loginFetcher)).login({
+      email: 'admin@example.test',
+      password: 'temporary-input',
+    });
+    const refreshedApiClient = new ApiClient('', vi.fn<typeof fetch>());
+    const refreshedGateway = new HttpAuthGateway(refreshedApiClient);
+
+    expect(refreshedGateway.cachedSession()).toEqual(SESSION_RESPONSE);
+    expect(refreshedApiClient.hasAccessToken()).toBe(true);
+    expect(window.localStorage).toHaveLength(0);
   });
 
   it('adds the in-memory bearer token centrally for session restoration and clears it on logout', async () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse(LOGIN_RESPONSE))
-      .mockResolvedValueOnce(jsonResponse(SESSION_RESPONSE));
+      .mockResolvedValueOnce(jsonResponse(SESSION_RESPONSE))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(jsonResponse({ code: 'SESSION_EXPIRED' }, 401));
     const gateway = new HttpAuthGateway(new ApiClient('', fetcher));
 
     await gateway.login({ email: 'admin@example.test', password: 'temporary-input' });
@@ -80,9 +96,40 @@ describe('HttpAuthGateway', () => {
     await gateway.logout();
 
     await expect(gateway.restoreSession()).resolves.toBeNull();
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(fetcher.mock.calls[2][0]).toBe('/api/v1/auth/logout');
+    expect(fetcher.mock.calls[2][1]).toMatchObject({ method: 'POST', credentials: 'include' });
+    expect(fetcher.mock.calls[3][0]).toBe('/api/v1/auth/refresh');
     expect(window.localStorage).toHaveLength(0);
     expect(window.sessionStorage).toHaveLength(0);
+  });
+
+  it('restores a refreshed browser session without using browser storage', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(LOGIN_RESPONSE));
+    const apiClient = new ApiClient('', fetcher);
+    const gateway = new HttpAuthGateway(apiClient);
+
+    await expect(gateway.restoreSession()).resolves.toEqual(SESSION_RESPONSE);
+
+    expect(apiClient.hasAccessToken()).toBe(true);
+    expect(fetcher).toHaveBeenCalledOnce();
+    const [url, request] = fetcher.mock.calls[0];
+    expect(url).toBe('/api/v1/auth/refresh');
+    expect(request).toMatchObject({ method: 'POST', credentials: 'include' });
+    expect(new Headers(request?.headers).has('Authorization')).toBe(false);
+    expect(window.localStorage).toHaveLength(0);
+    expect(window.sessionStorage).toHaveLength(1);
+  });
+
+  it('treats a rejected refresh cookie as signed out', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(jsonResponse({ code: 'SESSION_EXPIRED' }, 401));
+    const apiClient = new ApiClient('', fetcher);
+
+    await expect(new HttpAuthGateway(apiClient).restoreSession()).resolves.toBeNull();
+
+    expect(apiClient.hasAccessToken()).toBe(false);
   });
 
   it.each([
@@ -125,12 +172,13 @@ describe('HttpAuthGateway', () => {
     { ...LOGIN_RESPONSE, accessTokenExpiresAt: '2026-02-31T10:00:00Z' },
   ])('treats a malformed successful login response as unavailable', async (body) => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(body));
-    const gateway = new HttpAuthGateway(new ApiClient('', fetcher));
+    const apiClient = new ApiClient('', fetcher);
+    const gateway = new HttpAuthGateway(apiClient);
 
     await expect(
       gateway.login({ email: 'admin@example.test', password: 'temporary-input' }),
     ).rejects.toMatchObject({ code: 'API_UNAVAILABLE' });
-    await expect(gateway.restoreSession()).resolves.toBeNull();
+    expect(apiClient.hasAccessToken()).toBe(false);
     expect(fetcher).toHaveBeenCalledOnce();
   });
 

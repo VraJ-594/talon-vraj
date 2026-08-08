@@ -5,7 +5,7 @@
 
 ## Context
 
-Google Drive, xAI Grok, S3-compatible object storage, malware scanners, and SQS are useful initial
+Google Drive, Groq, S3-compatible object storage, malware scanners, and SQS are useful initial
 providers, but their SDKs and wire models must not become the domain model. Provider price, quota,
 availability, and deployment account are uncertain. Calendar and mail integrations are deferred.
 
@@ -19,7 +19,7 @@ application-owned in the priority slice and therefore has no external identity-p
 ## Consequences
 
 - Local deterministic fakes and contract tests are straightforward.
-- Grok can be replaced or disabled without changing the search criteria or query engine.
+- Groq can be replaced or disabled without changing the search criteria or query engine.
 - Deterministic Cmd+K and explicit-filter search remain available without AI credentials.
 - SQS can replace the local dispatcher without changing import behavior.
 - A future authenticated Drive or direct-upload adapter can replace the demo public-link source.

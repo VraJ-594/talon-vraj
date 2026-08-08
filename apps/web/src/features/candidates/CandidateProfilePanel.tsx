@@ -45,8 +45,8 @@ export function CandidateProfilePanel({
 }) {
   const showCompensation =
     canViewCompensation(role) &&
-    application.currentCompensation !== undefined &&
-    application.expectedCompensation !== undefined;
+    application.currentCompensation != null &&
+    application.expectedCompensation != null;
   const canDownloadResume =
     canViewCompensation(role) &&
     application.resumeStatus === 'CLEAN' &&
@@ -88,12 +88,21 @@ export function CandidateProfilePanel({
           <Phone aria-hidden="true" size={15} />
           {application.maskedPhone}
         </span>
-        <span>{application.source}</span>
-        <span>
-          <CalendarDays aria-hidden="true" size={15} />
-          Available{' '}
-          <time dateTime={application.availableFrom}>{formatDate(application.availableFrom)}</time>
-        </span>
+        <span>{application.source || 'Source not provided'}</span>
+        {application.availableFrom ? (
+          <span>
+            <CalendarDays aria-hidden="true" size={15} />
+            Available{' '}
+            <time dateTime={application.availableFrom}>
+              {formatDate(application.availableFrom)}
+            </time>
+          </span>
+        ) : (
+          <span>
+            <CalendarDays aria-hidden="true" size={15} />
+            Availability not provided
+          </span>
+        )}
       </div>
 
       <section className="candidate-profile-section" aria-labelledby="application-details-heading">
@@ -150,7 +159,7 @@ export function CandidateProfilePanel({
       <section className="candidate-profile-section candidate-resume-card" aria-label="Resume file">
         <div>
           <h3>Resume file</h3>
-          <strong>{application.resumeFileName}</strong>
+          <strong>{application.resumeFileName || 'No resume uploaded'}</strong>
           <span>File status: {application.resumeStatus.replaceAll('_', ' ').toLowerCase()}</span>
         </div>
         {downloadState === 'BLOCKED' ? (

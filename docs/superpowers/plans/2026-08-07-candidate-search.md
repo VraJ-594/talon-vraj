@@ -2,19 +2,19 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Provide deterministic Cmd+K search and Grok-translated natural-language candidate/application search through one validated, tenant-safe DSL.
+**Goal:** Provide deterministic Cmd+K search and Groq-translated natural-language candidate/application search through one validated, tenant-safe DSL.
 
-**Architecture:** An application-owned DSL validator and allowlisted compiler generate parameterized PostgreSQL queries. Grok receives only the user sentence plus DSL schema and cannot emit SQL. Keyword/filter search remains independent of Grok.
+**Architecture:** An application-owned DSL validator and allowlisted compiler generate parameterized PostgreSQL queries. Groq receives only the user sentence plus DSL schema and cannot emit SQL. Keyword/filter search remains independent of Groq.
 
-**Tech Stack:** Java 21, Spring Boot, Spring JDBC, PostgreSQL `tsvector`/`pg_trgm`, xAI Grok HTTP adapter, JUnit/Testcontainers, React/Vitest/Playwright in the parallel frontend workstream.
+**Tech Stack:** Java 21, Spring Boot, Spring JDBC, PostgreSQL `tsvector`/`pg_trgm`, Groq HTTP adapter, JUnit/Testcontainers, React/Vitest/Playwright in the parallel frontend workstream.
 
 ## Global Constraints
 
 - Search candidates/applications and jobs only.
-- Cmd+K never calls Grok.
+- Cmd+K never calls Groq.
 - Natural query maximum is 500 characters, timeout 3 seconds, rate 10/user/minute.
 - Compensation filters/results require Admin or Recruiter.
-- Grok never receives candidate data and never controls SQL identifiers/fragments.
+- Groq never receives candidate data and never controls SQL identifiers/fragments.
 - No OpenSearch, embeddings, vector database, or cross-currency conversion.
 
 ---
@@ -49,15 +49,15 @@
 - [ ] Implement endpoint and run full verification.
 - [ ] Commit `feat: add deterministic ATS command search`.
 
-### Task 4: Grok interpretation adapter
+### Task 4: Groq interpretation adapter
 
-**Files:** Create `NaturalLanguageSearchInterpreter` port, xAI adapter, schema prompt/response DTOs, configuration, and contract tests.
+**Files:** Create `NaturalLanguageSearchInterpreter` port, Groq adapter, schema prompt/response DTOs, configuration, and contract tests.
 
 **Interfaces:** Consumes query text plus fixed schema; produces an untrusted DSL candidate that must pass `SearchDslValidator`.
 
 - [ ] Test valid CTC/location/experience/date interpretations, unknown JSON rejection, forbidden fields, timeout, quota, malformed output, disabled provider, and no candidate-data request body.
 - [ ] Implement strict structured-output request, 3-second timeout, and stable failures.
-- [ ] Run full verification and commit `feat: translate natural language search with Grok`.
+- [x] Run full verification and commit `feat: translate natural language search with Groq`.
 
 ### Task 5: Interpret and candidate-search APIs
 
@@ -72,6 +72,6 @@
 
 **Files:** Update backend/frontend handoffs and Playwright fixtures/tests owned by the frontend branch.
 
-- [ ] Prove Admin sign-in, Cmd+K, `< 40 LPA` interpretation, editable chips, filtered results, Grok failure fallback, and CSV export filter reuse.
+- [ ] Prove Admin sign-in, Cmd+K, `< 40 LPA` interpretation, editable chips, filtered results, Groq failure fallback, and CSV export filter reuse.
 - [ ] Record PostgreSQL plan/latency evidence and provider-disabled behavior.
 - [ ] Commit `test: verify priority candidate search flow`.

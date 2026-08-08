@@ -8,4 +8,8 @@ import java.nio.file.Path;
 public interface ObjectStorageFactory {
 
   ObjectStorage local(Path root);
+
+  default ObjectStorage s3(String bucket, String region) {
+    throw new UnsupportedOperationException("S3 private storage is unavailable");
+  }
 }

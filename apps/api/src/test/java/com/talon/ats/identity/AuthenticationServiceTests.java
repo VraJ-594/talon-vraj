@@ -10,6 +10,7 @@ import com.talon.ats.identity.application.AuthenticationResult;
 import com.talon.ats.identity.application.AuthenticationService;
 import com.talon.ats.identity.application.IdentityAccountStore;
 import com.talon.ats.identity.application.PasswordVerifier;
+import com.talon.ats.identity.application.RefreshSessionRejectedException;
 import com.talon.ats.identity.application.TokenIssuer;
 import com.talon.ats.identity.contract.WorkspaceRole;
 import com.talon.ats.identity.domain.AppUser;
@@ -114,6 +115,41 @@ class AuthenticationServiceTests {
     assertThat(store.savedSession).isNull();
   }
 
+  @Test
+  void rotatesAValidRefreshSessionAndIssuesANewAccessToken() {
+    RecordingAccountStore store = new RecordingAccountStore(Optional.of(activeAccount()));
+    store.rotatedAccount = Optional.of(activeAccount());
+    RecordingTokenIssuer issuer = new RecordingTokenIssuer();
+
+    AuthenticationResult result =
+        service(store, new RecordingPasswordVerifier(true), issuer)
+            .refresh("existing-refresh-token");
+
+    assertThat(store.currentTokenHash).isEqualTo("hashed-existing-refresh-token");
+    assertThat(store.nextTokenHash).isEqualTo("hashed-refresh-token");
+    assertThat(store.nextSessionId).isEqualTo(uuid(10));
+    assertThat(store.nextExpiresAt).isEqualTo(NOW.plus(Duration.ofDays(7)));
+    assertThat(store.rotatedAt).isEqualTo(NOW);
+    assertThat(result.accessToken()).isEqualTo("signed-access-token");
+    assertThat(result.refreshToken()).isEqualTo("raw-refresh-token");
+    assertThat(result.accessTokenExpiresAt()).isEqualTo(NOW.plus(Duration.ofMinutes(15)));
+  }
+
+  @Test
+  void rejectsAnUnavailableRefreshSessionAndRevokesLogoutFamilyByHash() {
+    RecordingAccountStore store = new RecordingAccountStore(Optional.of(activeAccount()));
+    AuthenticationService service =
+        service(store, new RecordingPasswordVerifier(true), new RecordingTokenIssuer());
+
+    assertThatThrownBy(() -> service.refresh("missing-refresh-token"))
+        .isInstanceOf(RefreshSessionRejectedException.class)
+        .hasMessage("Session is unavailable");
+
+    service.logout("existing-refresh-token");
+    assertThat(store.revokedTokenHash).isEqualTo("hashed-existing-refresh-token");
+    assertThat(store.revokedAt).isEqualTo(NOW);
+  }
+
   private AuthenticationService service(
       IdentityAccountStore store, PasswordVerifier passwordVerifier, TokenIssuer tokenIssuer) {
     Deque<UUID> ids = new ArrayDeque<>();
@@ -167,6 +203,14 @@ class AuthenticationServiceTests {
     private String requestedEmail;
     private RefreshSession savedSession;
     private Instant loginRecordedAt;
+    private Optional<AuthenticationAccount> rotatedAccount = Optional.empty();
+    private String currentTokenHash;
+    private UUID nextSessionId;
+    private String nextTokenHash;
+    private Instant nextExpiresAt;
+    private Instant rotatedAt;
+    private String revokedTokenHash;
+    private Instant revokedAt;
 
     private RecordingAccountStore(Optional<AuthenticationAccount> account) {
       this.account = account;
@@ -182,6 +226,27 @@ class AuthenticationServiceTests {
     public void completeSuccessfulLogin(RefreshSession refreshSession, Instant loggedInAt) {
       savedSession = refreshSession;
       loginRecordedAt = loggedInAt;
+    }
+
+    @Override
+    public Optional<AuthenticationAccount> rotateRefreshSession(
+        String currentTokenHash,
+        UUID nextSessionId,
+        String nextTokenHash,
+        Instant nextExpiresAt,
+        Instant rotatedAt) {
+      this.currentTokenHash = currentTokenHash;
+      this.nextSessionId = nextSessionId;
+      this.nextTokenHash = nextTokenHash;
+      this.nextExpiresAt = nextExpiresAt;
+      this.rotatedAt = rotatedAt;
+      return rotatedAccount;
+    }
+
+    @Override
+    public void revokeRefreshSessionFamily(String currentTokenHash, Instant revokedAt) {
+      revokedTokenHash = currentTokenHash;
+      this.revokedAt = revokedAt;
     }
   }
 
@@ -218,8 +283,12 @@ class AuthenticationServiceTests {
 
     @Override
     public String hashRefreshToken(String rawRefreshToken) {
-      assertThat(rawRefreshToken).isEqualTo("raw-refresh-token");
-      return "hashed-refresh-token";
+      return switch (rawRefreshToken) {
+        case "raw-refresh-token" -> "hashed-refresh-token";
+        case "existing-refresh-token" -> "hashed-existing-refresh-token";
+        case "missing-refresh-token" -> "hashed-missing-refresh-token";
+        default -> throw new AssertionError("unexpected refresh token input");
+      };
     }
   }
 }

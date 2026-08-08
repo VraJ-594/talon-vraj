@@ -25,6 +25,7 @@ export type LoginCredentials = {
 };
 
 export interface AuthGateway {
+  cachedSession?(): AuthenticatedSession | undefined;
   restoreSession(): Promise<AuthenticatedSession | null>;
   login(credentials: LoginCredentials): Promise<AuthenticatedSession>;
   logout(): Promise<void>;

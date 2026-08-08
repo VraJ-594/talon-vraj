@@ -63,7 +63,7 @@ public final class ImportApplicationWorker {
                     row.availabilityDate(),
                     money(row.currentCompensation()),
                     money(row.expectedCompensation()),
-                    Map.of()));
+                    Map.of("resume_drive_url", row.resumeDriveUrl())));
         repository.markApplicationCreated(
             actor.workspaceId(),
             importId,

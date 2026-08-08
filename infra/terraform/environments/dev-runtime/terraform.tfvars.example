@@ -1,0 +1,7 @@
+aws_region         = "ap-south-1"
+environment        = "dev"
+state_bucket_name  = "talon-dev-<account-id>-ap-south-1-tfstate-vraj"
+api_image_uri      = "<account-id>.dkr.ecr.ap-south-1.amazonaws.com/talon-dev-api-vraj:<40-character-git-sha>"
+web_image_uri      = "<account-id>.dkr.ecr.ap-south-1.amazonaws.com/talon-dev-web-vraj:<40-character-git-sha>"
+allowed_demo_cidrs = ["<reviewer-public-ip>/32"]
+search_ai_enabled  = true

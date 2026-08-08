@@ -230,16 +230,18 @@ export function ImportWizard({
   const downloadTemplate = () => {
     setPendingOperation('template');
     setOperationError(null);
-    void (importGateway.downloadTemplate
-      ? importGateway.downloadTemplate()
-      : Promise.resolve(
-          new Blob(
-            [
-              'first_name,last_name,email,resume_drive_url,phone,location,total_experience_years,current_company,current_title,skills,current_ctc,expected_ctc,ctc_unit,ctc_currency,notice_period_days,availability_date,source,application_date\r\n',
-            ],
-            { type: 'text/csv;charset=utf-8' },
-          ),
-        ))
+    void (
+      importGateway.downloadTemplate
+        ? importGateway.downloadTemplate()
+        : Promise.resolve(
+            new Blob(
+              [
+                'first_name,last_name,email,resume_drive_url,phone,location,total_experience_years,current_company,current_title,skills,current_ctc,expected_ctc,ctc_unit,ctc_currency,notice_period_days,availability_date,source,application_date\r\n',
+              ],
+              { type: 'text/csv;charset=utf-8' },
+            ),
+          )
+    )
       .then((blob) => {
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement('a');

@@ -54,11 +54,17 @@ public class ImportRuntimeConfiguration {
   ObjectStorage importObjectStorage(
       ObjectStorageFactory storageFactory,
       @Value("${talon.files.provider:local}") String provider,
-      @Value("${talon.files.local-root:${java.io.tmpdir}/talon-private-files}") String localRoot) {
-    if (!"local".equals(provider.trim().toLowerCase(Locale.ROOT))) {
-      throw new IllegalStateException("configured private object storage provider is unavailable");
-    }
-    return storageFactory.local(Path.of(localRoot));
+      @Value("${talon.files.local-root:${java.io.tmpdir}/talon-private-files}") String localRoot,
+      @Value("${talon.files.s3.bucket:}") String s3Bucket,
+      @Value("${talon.files.s3.region:}") String s3Region) {
+    return switch (provider.trim().toLowerCase(Locale.ROOT)) {
+      case "local" -> storageFactory.local(Path.of(localRoot));
+      case "s3" ->
+          storageFactory.s3(required(s3Bucket, "S3 bucket"), required(s3Region, "S3 region"));
+      default ->
+          throw new IllegalStateException(
+              "configured private object storage provider is unavailable");
+    };
   }
 
   @Bean
@@ -103,5 +109,12 @@ public class ImportRuntimeConfiguration {
         UUID::randomUUID,
         Clock.systemUTC(),
         dispatcher);
+  }
+
+  private static String required(String value, String field) {
+    if (value == null || value.isBlank()) {
+      throw new IllegalStateException(field + " is required for private S3 storage");
+    }
+    return value.trim();
   }
 }

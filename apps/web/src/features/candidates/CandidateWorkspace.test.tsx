@@ -1,18 +1,12 @@
-import { act, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CandidateWorkspace } from './CandidateWorkspace';
 import { CandidateGatewayError } from './candidateGateway';
 import { createFixtureCandidateGateway } from './fixtureCandidateGateway';
 
 describe('CandidateWorkspace', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    Reflect.deleteProperty(URL, 'createObjectURL');
-    Reflect.deleteProperty(URL, 'revokeObjectURL');
-  });
-
   it('shows the approved candidate and application projection for an administrator', async () => {
     render(
       <CandidateWorkspace
@@ -24,7 +18,10 @@ describe('CandidateWorkspace', () => {
     expect(
       await screen.findByRole('heading', { name: 'Application pipeline' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Nila Raman application' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Nila Raman application' })).toHaveAttribute(
+      'href',
+      '/candidates/applications/application-nila-backend',
+    );
     expect(screen.getByText('Senior Backend Engineer')).toBeInTheDocument();
     expect(screen.getByText('Screening')).toBeInTheDocument();
     expect(screen.getByText('Pune')).toBeInTheDocument();
@@ -42,64 +39,9 @@ describe('CandidateWorkspace', () => {
     );
   });
 
-  it('opens the selected application profile with additional answers and clean resume access', async () => {
+  it('opens an application on a dedicated candidate profile route', async () => {
     const user = userEvent.setup();
-    const fixtureGateway = createFixtureCandidateGateway();
-    const createObjectURL = vi.fn(() => 'blob:fixture-resume');
-    const revokeObjectURL = vi.fn();
-    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
-    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
-    const anchorClick = vi
-      .spyOn(HTMLAnchorElement.prototype, 'click')
-      .mockImplementation(() => undefined);
-    const downloadResume = vi
-      .fn()
-      .mockImplementation((applicationId: string) => fixtureGateway.downloadResume(applicationId));
-    render(
-      <CandidateWorkspace
-        candidateGateway={{ ...fixtureGateway, downloadResume }}
-        role="WORKSPACE_ADMIN"
-      />,
-    );
-
-    await user.click(await screen.findByRole('button', { name: 'Open Nila Raman application' }));
-
-    expect(await screen.findByRole('heading', { name: 'Nila Raman' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Nila Raman' })).toHaveFocus();
-    expect(screen.getByRole('button', { name: 'Open Nila Raman application' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
-    expect(screen.getByText('nila.raman@example.test')).toBeInTheDocument();
-    expect(screen.getByText('+91 ••••• 0184')).toBeInTheDocument();
-    expect(screen.getByText('Google Forms')).toBeInTheDocument();
-    expect(screen.getByText('1 Sep 2026')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Additional form answers' })).toBeInTheDocument();
-    expect(screen.getByText('Why are you interested in this role?')).toBeInTheDocument();
-    expect(
-      screen.getByText('Building reliable hiring systems at product scale.'),
-    ).toBeInTheDocument();
-    expect(screen.getByText('nila-raman-resume.pdf')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Download clean resume' }));
-
-    expect(await screen.findByRole('status')).toHaveTextContent('Resume download started.');
-    expect(downloadResume).toHaveBeenCalledWith('application-nila-backend');
-    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
-    expect(anchorClick).toHaveBeenCalledOnce();
-    expect(anchorClick.mock.contexts[0]).toHaveProperty('download', 'nila-raman-resume.pdf');
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:fixture-resume');
-
-    await user.click(screen.getByRole('button', { name: 'Close profile' }));
-    expect(screen.getByRole('button', { name: 'Open Nila Raman application' })).toHaveFocus();
-    expect(screen.getByRole('button', { name: 'Open Nila Raman application' })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
-    expect(screen.queryByRole('heading', { name: 'Nila Raman' })).not.toBeInTheDocument();
-  });
-
-  it('does not offer resume download until the file is clean', async () => {
-    const user = userEvent.setup();
+    window.history.replaceState({}, '', '/candidates');
     render(
       <CandidateWorkspace
         candidateGateway={createFixtureCandidateGateway()}
@@ -107,140 +49,56 @@ describe('CandidateWorkspace', () => {
       />,
     );
 
-    await user.click(await screen.findByRole('button', { name: 'Open Kai Sen application' }));
+    await user.click(await screen.findByRole('link', { name: 'Open Nila Raman application' }));
 
-    expect(await screen.findByRole('heading', { name: 'Kai Sen' })).toBeInTheDocument();
-    expect(screen.getByText('Resume scan pending')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Download clean resume' })).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe('/candidates/applications/application-nila-backend');
   });
 
-  it('removes a stale resume download action after an authorization rejection', async () => {
-    const user = userEvent.setup();
+  it('shows when an application has no uploaded resume', async () => {
     const fixtureGateway = createFixtureCandidateGateway();
+    const fixturePage = await fixtureGateway.listApplications();
     render(
       <CandidateWorkspace
         candidateGateway={{
           ...fixtureGateway,
-          downloadResume: async () => {
-            throw new CandidateGatewayError(
-              'RESUME_DOWNLOAD_FORBIDDEN',
-              'private authorization detail',
-            );
-          },
+          listApplications: async () => ({
+            items: [{ ...fixturePage.items[0], resumeStatus: 'NO_RESUME' }],
+            nextCursor: null,
+          }),
         }}
         role="WORKSPACE_ADMIN"
       />,
     );
 
-    await user.click(await screen.findByRole('button', { name: 'Open Nila Raman application' }));
-    await user.click(await screen.findByRole('button', { name: 'Download clean resume' }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Resume download is no longer available.',
-    );
-    expect(screen.queryByText(/private authorization detail/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Download clean resume' })).not.toBeInTheDocument();
+    expect(await screen.findByText('No resume uploaded')).toBeInTheDocument();
   });
 
-  it('announces profile loading before showing the selected application', async () => {
+  it('loads the next application page without replacing existing rows', async () => {
     const user = userEvent.setup();
     const fixtureGateway = createFixtureCandidateGateway();
-    let resolveDetail:
-      ((detail: Awaited<ReturnType<typeof fixtureGateway.getApplication>>) => void) | undefined;
-    const detailPromise = new Promise<Awaited<ReturnType<typeof fixtureGateway.getApplication>>>(
-      (resolve) => {
-        resolveDetail = resolve;
-      },
+    const fixturePage = await fixtureGateway.listApplications();
+    const listApplications = vi.fn(async (cursor?: string | null) =>
+      cursor
+        ? { items: [fixturePage.items[1]], nextCursor: null }
+        : { items: [fixturePage.items[0]], nextCursor: 'opaque-page-2' },
     );
-
     render(
       <CandidateWorkspace
-        candidateGateway={{ ...fixtureGateway, getApplication: () => detailPromise }}
+        candidateGateway={{ ...fixtureGateway, listApplications }}
         role="WORKSPACE_ADMIN"
       />,
     );
 
-    await user.click(await screen.findByRole('button', { name: 'Open Nila Raman application' }));
-    expect(screen.getByRole('status')).toHaveTextContent('Loading Nila Raman profile…');
-    expect(screen.getByRole('button', { name: 'Open Nila Raman application' })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
+    expect(await screen.findByText('Nila Raman')).toBeInTheDocument();
+    expect(screen.queryByText('Kai Sen')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Load more applications' }));
 
-    resolveDetail?.(await fixtureGateway.getApplication('application-nila-backend'));
-    expect(await screen.findByRole('heading', { name: 'Nila Raman' })).toBeInTheDocument();
+    expect(await screen.findByText('Kai Sen')).toBeInTheDocument();
+    expect(screen.getByText('Nila Raman')).toBeInTheDocument();
+    expect(listApplications).toHaveBeenNthCalledWith(2, 'opaque-page-2');
   });
 
-  it('shows a safe candidate profile error and retries the selected application', async () => {
-    const user = userEvent.setup();
-    const fixtureGateway = createFixtureCandidateGateway();
-    const getApplication = vi
-      .fn()
-      .mockRejectedValueOnce(
-        new CandidateGatewayError('UNAVAILABLE', 'provider token should stay hidden'),
-      )
-      .mockImplementation((applicationId: string) => fixtureGateway.getApplication(applicationId));
-
-    render(
-      <CandidateWorkspace
-        candidateGateway={{ ...fixtureGateway, getApplication }}
-        role="WORKSPACE_ADMIN"
-      />,
-    );
-
-    await user.click(await screen.findByRole('button', { name: 'Open Nila Raman application' }));
-    expect(
-      await screen.findByRole('alert', { name: 'Candidate profile could not be loaded.' }),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/provider token/i)).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Retry candidate profile' }));
-    expect(await screen.findByRole('heading', { name: 'Nila Raman' })).toBeInTheDocument();
-    expect(getApplication).toHaveBeenCalledTimes(2);
-  });
-
-  it('keeps the newest profile selection when requests resolve out of order', async () => {
-    const user = userEvent.setup();
-    const fixtureGateway = createFixtureCandidateGateway();
-    const details = new Map<
-      string,
-      (detail: Awaited<ReturnType<typeof fixtureGateway.getApplication>>) => void
-    >();
-    const getApplication = vi.fn(
-      (applicationId: string) =>
-        new Promise<Awaited<ReturnType<typeof fixtureGateway.getApplication>>>((resolve) => {
-          details.set(applicationId, resolve);
-        }),
-    );
-
-    render(
-      <CandidateWorkspace
-        candidateGateway={{ ...fixtureGateway, getApplication }}
-        role="WORKSPACE_ADMIN"
-      />,
-    );
-
-    await user.click(await screen.findByRole('button', { name: 'Open Nila Raman application' }));
-    await user.click(screen.getByRole('button', { name: 'Open Kai Sen application' }));
-
-    await act(async () => {
-      details.get('application-kai-product')?.(
-        await fixtureGateway.getApplication('application-kai-product'),
-      );
-    });
-    expect(await screen.findByRole('heading', { name: 'Kai Sen' })).toBeInTheDocument();
-
-    await act(async () => {
-      details.get('application-nila-backend')?.(
-        await fixtureGateway.getApplication('application-nila-backend'),
-      );
-    });
-    expect(screen.getByRole('heading', { name: 'Kai Sen' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Nila Raman' })).not.toBeInTheDocument();
-  });
-
-  it('keeps application compensation out of both list and profile for hiring managers', async () => {
-    const user = userEvent.setup();
+  it('keeps application compensation out of the list for hiring managers', async () => {
     render(
       <CandidateWorkspace
         candidateGateway={createFixtureCandidateGateway({
@@ -251,15 +109,10 @@ describe('CandidateWorkspace', () => {
       />,
     );
 
-    await user.click(await screen.findByRole('button', { name: 'Open Nila Raman application' }));
-
-    expect(await screen.findByRole('heading', { name: 'Nila Raman' })).toBeInTheDocument();
+    expect(await screen.findByText('Nila Raman')).toBeInTheDocument();
     expect(screen.queryByText('Current ₹32.00 LPA')).not.toBeInTheDocument();
     expect(screen.queryByText('Expected ₹40.00 LPA')).not.toBeInTheDocument();
-    expect(
-      screen.getByText('Compensation is available only to Admin and Recruiter roles.'),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Download clean resume' })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Compensation restricted')).toHaveLength(2);
   });
 
   it('announces that candidate applications are loading', () => {
@@ -282,7 +135,10 @@ describe('CandidateWorkspace', () => {
     const fixtureGateway = createFixtureCandidateGateway();
     render(
       <CandidateWorkspace
-        candidateGateway={{ ...fixtureGateway, listApplications: async () => [] }}
+        candidateGateway={{
+          ...fixtureGateway,
+          listApplications: async () => ({ items: [], nextCursor: null }),
+        }}
         role="WORKSPACE_ADMIN"
       />,
     );

@@ -39,3 +39,17 @@ stored in the bootstrap-managed private encrypted S3 bucket with native lockfile
 current versions are retained while active; superseded/deleted versions expire after 30 days. A
 future privacy-erasure workflow must delete every version for immediate candidate deletion rather
 than waiting for lifecycle expiry.
+
+This root also creates the two private immutable ECR repositories and the empty runtime secret used
+by the ECS demo. Terraform intentionally creates no secret version. Copy
+`runtime-secret.json.example` to an ignored `runtime-secret.json`, replace every placeholder, and
+populate it without printing its content:
+
+```powershell
+aws secretsmanager put-secret-value `
+  --secret-id talon-dev-runtime-vraj `
+  --secret-string file://runtime-secret.json
+```
+
+Delete the ignored local JSON after confirming a current secret version exists. Never pass these
+values through Terraform variables because Terraform state would retain them.

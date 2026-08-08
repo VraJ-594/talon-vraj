@@ -48,3 +48,15 @@ talon:
   files:
     provider: ${TALON_FILES_PROVIDER:local}
     local-root: ${TALON_FILES_LOCAL_ROOT:${java.io.tmpdir}/talon-private-files}
+    s3:
+      bucket: ${TALON_FILES_S3_BUCKET:}
+      region: ${TALON_FILES_S3_REGION:}
+  search:
+    demo-data:
+      enabled: ${TALON_SEARCH_DEMO_DATA_ENABLED:false}
+      workspace-slug: ${TALON_SEARCH_DEMO_WORKSPACE_SLUG:${TALON_DEMO_ADMIN_WORKSPACE_SLUG:talon-demo}}
+    ai:
+      enabled: ${TALON_SEARCH_AI_ENABLED:false}
+      api-key: ${GROQ_API_KEY:}
+      model: ${TALON_SEARCH_AI_MODEL:openai/gpt-oss-20b}
+      endpoint: ${TALON_SEARCH_AI_ENDPOINT:https://api.groq.com/openai/v1/chat/completions}

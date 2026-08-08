@@ -10,7 +10,7 @@ describe('fixture candidate permissions', () => {
       downloadCleanResumes: false,
     });
 
-    const [summary] = await gateway.listApplications();
+    const [summary] = (await gateway.listApplications()).items;
     const detail = await gateway.getApplication('application-nila-backend');
 
     expect(summary).not.toHaveProperty('currentCompensation');

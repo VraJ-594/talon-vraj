@@ -189,6 +189,115 @@ public final class JdbcIdentityAccountStore
         });
   }
 
+  @Override
+  public Optional<AuthenticationAccount> rotateRefreshSession(
+      String currentTokenHash,
+      UUID nextSessionId,
+      String nextTokenHash,
+      Instant nextExpiresAt,
+      Instant rotatedAt) {
+    Objects.requireNonNull(currentTokenHash, "currentTokenHash is required");
+    Objects.requireNonNull(nextSessionId, "nextSessionId is required");
+    Objects.requireNonNull(nextTokenHash, "nextTokenHash is required");
+    Objects.requireNonNull(nextExpiresAt, "nextExpiresAt is required");
+    Objects.requireNonNull(rotatedAt, "rotatedAt is required");
+    Optional<AuthenticationAccount> result =
+        transactions.execute(
+            status -> {
+              Optional<RefreshRotationCandidate> candidate =
+                  jdbc
+                      .query(
+                          """
+                          SELECT rs.id AS session_id, rs.workspace_id, rs.user_id, rs.family_id,
+                                 rs.expires_at, rs.used_at, rs.revoked_at,
+                                 app.id, app.email, app.normalized_email, app.display_name,
+                                 app.password_hash, app.status, app.default_workspace_id,
+                                 app.created_at, app.last_login_at, workspace.name AS workspace_name,
+                                 membership.id AS membership_id, membership.role AS membership_role,
+                                 membership.status AS membership_status,
+                                 membership.joined_at AS membership_joined_at,
+                                 membership.version AS membership_version
+                          FROM refresh_session rs
+                          JOIN app_user app ON app.id = rs.user_id
+                          JOIN workspace ON workspace.id = rs.workspace_id
+                          JOIN workspace_membership membership
+                            ON membership.workspace_id = rs.workspace_id
+                           AND membership.user_id = rs.user_id
+                          WHERE rs.token_hash = ?
+                          FOR UPDATE OF rs
+                          """,
+                          JdbcIdentityAccountStore::mapRefreshCandidate,
+                          currentTokenHash)
+                      .stream()
+                      .findFirst();
+              if (candidate.isEmpty()) return Optional.empty();
+
+              RefreshRotationCandidate current = candidate.orElseThrow();
+              if (!current.activeAt(rotatedAt)) {
+                revokeFamily(current.familyId(), rotatedAt);
+                return Optional.empty();
+              }
+              int consumed =
+                  jdbc.update(
+                      """
+                      UPDATE refresh_session
+                      SET used_at = ?
+                      WHERE id = ? AND used_at IS NULL AND revoked_at IS NULL
+                      """,
+                      timestamp(rotatedAt),
+                      current.sessionId());
+              if (consumed != 1) {
+                revokeFamily(current.familyId(), rotatedAt);
+                return Optional.empty();
+              }
+              jdbc.update(
+                  """
+                  INSERT INTO refresh_session(
+                      id, workspace_id, user_id, token_hash, family_id, parent_id,
+                      expires_at, used_at, revoked_at, created_at)
+                  VALUES (?,?,?,?,?,?,?,?,?,?)
+                  """,
+                  nextSessionId,
+                  current.account().membership().workspaceId(),
+                  current.account().user().id(),
+                  nextTokenHash,
+                  current.familyId(),
+                  current.sessionId(),
+                  timestamp(nextExpiresAt),
+                  null,
+                  null,
+                  timestamp(rotatedAt));
+              return Optional.of(current.account());
+            });
+    return result == null ? Optional.empty() : result;
+  }
+
+  @Override
+  public void revokeRefreshSessionFamily(String currentTokenHash, Instant revokedAt) {
+    Objects.requireNonNull(currentTokenHash, "currentTokenHash is required");
+    Objects.requireNonNull(revokedAt, "revokedAt is required");
+    transactions.executeWithoutResult(
+        status -> {
+          List<UUID> families =
+              jdbc.query(
+                  "SELECT family_id FROM refresh_session WHERE token_hash = ?",
+                  (rows, number) -> rows.getObject("family_id", UUID.class),
+                  currentTokenHash);
+          if (!families.isEmpty()) revokeFamily(families.getFirst(), revokedAt);
+        });
+  }
+
+  private void revokeFamily(UUID familyId, Instant revokedAt) {
+    jdbc.update(
+        """
+        UPDATE refresh_session
+        SET revoked_at = COALESCE(revoked_at, ?)
+        WHERE family_id = ?
+        """,
+        timestamp(revokedAt),
+        familyId);
+  }
+
   private void setTenantContext(UUID workspaceId) {
     jdbc.queryForObject(
         "SELECT set_config('app.current_workspace_id', ?, true)",
@@ -225,6 +334,36 @@ public final class JdbcIdentityAccountStore
         resultSet.getLong("version"));
   }
 
+  private static RefreshRotationCandidate mapRefreshCandidate(ResultSet resultSet, int rowNumber)
+      throws SQLException {
+    AppUser user =
+        new AppUser(
+            resultSet.getObject("id", UUID.class),
+            resultSet.getString("email"),
+            resultSet.getString("normalized_email"),
+            resultSet.getString("display_name"),
+            resultSet.getString("password_hash"),
+            AppUserStatus.valueOf(resultSet.getString("status")),
+            instant(resultSet, "created_at"),
+            instant(resultSet, "last_login_at"));
+    WorkspaceMembership membership =
+        new WorkspaceMembership(
+            resultSet.getObject("membership_id", UUID.class),
+            resultSet.getObject("workspace_id", UUID.class),
+            resultSet.getObject("user_id", UUID.class),
+            WorkspaceRole.valueOf(resultSet.getString("membership_role")),
+            WorkspaceMembershipStatus.valueOf(resultSet.getString("membership_status")),
+            instant(resultSet, "membership_joined_at"),
+            resultSet.getLong("membership_version"));
+    return new RefreshRotationCandidate(
+        resultSet.getObject("session_id", UUID.class),
+        resultSet.getObject("family_id", UUID.class),
+        instant(resultSet, "expires_at"),
+        instant(resultSet, "used_at"),
+        instant(resultSet, "revoked_at"),
+        new AuthenticationAccount(user, membership, resultSet.getString("workspace_name")));
+  }
+
   private static Instant instant(ResultSet resultSet, String column) throws SQLException {
     OffsetDateTime value = resultSet.getObject(column, OffsetDateTime.class);
     return value == null ? null : value.toInstant();
@@ -235,4 +374,21 @@ public final class JdbcIdentityAccountStore
   }
 
   private record AccountWorkspace(AppUser user, UUID workspaceId, String workspaceName) {}
+
+  private record RefreshRotationCandidate(
+      UUID sessionId,
+      UUID familyId,
+      Instant expiresAt,
+      Instant usedAt,
+      Instant revokedAt,
+      AuthenticationAccount account) {
+
+    private boolean activeAt(Instant instant) {
+      return usedAt == null
+          && revokedAt == null
+          && expiresAt.isAfter(instant)
+          && account.user().status() == AppUserStatus.ACTIVE
+          && account.membership().status() == WorkspaceMembershipStatus.ACTIVE;
+    }
+  }
 }

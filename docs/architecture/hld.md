@@ -18,7 +18,7 @@ Active:
 - required public Google Drive PDF ingestion into private object storage;
 - private candidate CSV export;
 - candidate/application list and basic profile;
-- Cmd+K keyword search, typed filters/sorting, and Grok-to-validated-DSL interpretation;
+- Cmd+K keyword search, typed filters/sorting, and Groq-to-validated-DSL interpretation;
 - Terraform for portable AWS runtime and Playwright for the priority journey.
 
 Deferred: public sign-up, OAuth, 2FA, invitations, calendar, interviews, scorecards, offers,
@@ -42,7 +42,7 @@ PostgreSQL  private S3   SQS in AWS
                            |
                  malware scanner / PDFBox
 
-Natural-language query -> Grok adapter -> validated DSL -> PostgreSQL
+Natural-language query -> Groq adapter -> validated DSL -> PostgreSQL
 Cmd+K/explicit filters -----------------> typed criteria -> PostgreSQL
 ```
 
@@ -59,7 +59,7 @@ TLS connection string so another PostgreSQL host can replace it without changing
 | Candidates | Candidate identity, job applications, compensation/profile data |
 | Imports | CSV validation/mapping, durable jobs/rows, idempotent orchestration |
 | Files | Quarantine, scan state, PDF extraction, private-object authorization |
-| Search | Typed criteria, PostgreSQL query, DSL validation, Grok interpretation |
+| Search | Typed criteria, PostgreSQL query, DSL validation, Groq interpretation |
 | Worker | Claims durable work locally or consumes SQS using the same handlers |
 | Terraform | Parameterized AWS edge, compute, storage, messaging, secrets, and observability |
 
@@ -92,7 +92,7 @@ and lifecycle policy removes the artifact after seven days.
 
 ### Search
 
-Cmd+K and explicit filters build typed criteria directly. Natural-language mode gives Grok only
+Cmd+K and explicit filters build typed criteria directly. Natural-language mode gives Groq only
 the query and restricted DSL schema. The backend rejects unknown/invalid fields, operators,
 values, money semantics, and sort keys before mapping the accepted criteria to parameterized
 PostgreSQL queries. Provider failure never disables deterministic search.
@@ -123,7 +123,7 @@ PostgreSQL queries. Provider failure never disables deterministic search.
 S3 Block Public Access, disabled ACLs, encryption, opaque keys, least-privilege IAM, and private
 network paths protect candidate files. Logs contain correlation/workspace/job identifiers but not
 passwords, tokens, resume text, public Drive URLs, or candidate PII. Metrics cover auth failures,
-import row states, download throttling/retries, scan results, worker lag, search latency, Grok
+import row states, download throttling/retries, scan results, worker lag, search latency, Groq
 failures, and export expiry. Audit events cover sensitive commands and downloads.
 
 ## 9. Quality attributes

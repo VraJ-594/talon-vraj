@@ -1,9 +1,12 @@
 package com.talon.ats.candidates.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.talon.ats.candidates.application.CandidateApplicationQueryService;
+import com.talon.ats.candidates.application.CandidateApplicationQueryStore;
 import com.talon.ats.candidates.application.CandidateApplicationService;
 import com.talon.ats.candidates.application.CandidateApplicationStore;
 import com.talon.ats.candidates.contract.CandidateImportAccess;
+import com.talon.ats.candidates.infrastructure.persistence.JdbcCandidateApplicationQueryStore;
 import com.talon.ats.candidates.infrastructure.persistence.JdbcCandidateApplicationStore;
 import com.talon.ats.candidates.infrastructure.persistence.JdbcCandidateImportAccess;
 import java.time.Clock;
@@ -29,6 +32,19 @@ public class CandidateRuntimeConfiguration {
   @Bean
   CandidateApplicationService candidateApplicationService(CandidateApplicationStore store) {
     return new CandidateApplicationService(store, UUID::randomUUID, Clock.systemUTC());
+  }
+
+  @Bean
+  CandidateApplicationQueryStore candidateApplicationQueryStore(
+      JdbcTemplate jdbc, PlatformTransactionManager transactionManager, ObjectMapper objectMapper) {
+    return new JdbcCandidateApplicationQueryStore(
+        jdbc, new TransactionTemplate(transactionManager), objectMapper);
+  }
+
+  @Bean
+  CandidateApplicationQueryService candidateApplicationQueryService(
+      CandidateApplicationQueryStore store) {
+    return new CandidateApplicationQueryService(store);
   }
 
   @Bean

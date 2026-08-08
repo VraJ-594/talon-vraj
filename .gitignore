@@ -28,6 +28,7 @@ test-results/
 # Terraform local state and plans
 .terraform/
 backend.hcl
+runtime-secret.json
 *.tfstate
 *.tfstate.*
 *.tfplan

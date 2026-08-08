@@ -2,10 +2,11 @@
 
 ## Scope and status
 
-Status: AWS bootstrap and development private-storage stacks are applied and verified in account
-`762079300828`, region `ap-south-1`. GitHub workflow source is implemented. Repository variables,
-the first GitHub-hosted workflow run, and the real application Drive-to-S3 smoke remain open gates.
-ECS is intentionally not part of this checkpoint.
+Status: AWS bootstrap and development foundation stacks are applied and verified in account
+`762079300828`, region `ap-south-1`. The foundation now includes candidate storage, private ECR
+repositories, and runtime-secret metadata. GitHub workflow source and the separate ECS runtime root
+are implemented. Repository variables, the first GitHub-hosted workflow run, runtime apply, and the
+real application Drive-to-S3 smoke remain open gates.
 
 ## What changed
 
@@ -25,22 +26,27 @@ ECS is intentionally not part of this checkpoint.
   repository and `main` branch.
 - Bootstrap and development state are separate so the candidate-storage stack can evolve without
   owning its own state infrastructure.
-- ECS remains gated until the application proves a real public-Drive PDF can reach private S3.
+- ECS is isolated in a third state root so foundation changes do not accidentally replace the
+  runtime. The current demo runtime may be applied after immutable images are pushed; the real
+  Drive-to-S3 transfer remains an acceptance gate rather than a prerequisite for declaring the HCL.
 
 ## Important paths
 
 1. An authenticated operator applies `infra/terraform/bootstrap` once with local state.
 2. Bootstrap creates the state bucket and branch-restricted Actions role, then its state migrates to
    `talon/bootstrap/terraform.tfstate`.
-3. `infra/terraform/environments/dev` stores state at `talon/dev/terraform.tfstate` and owns only
-   the current candidate-storage foundation.
-4. GitHub Actions assumes `talon-dev-github-terraform-vraj` through OIDC, saves a plan, and applies
-   that exact plan. No AWS key is stored in GitHub.
+3. `infra/terraform/environments/dev` stores state at `talon/dev/terraform.tfstate` and owns the
+   candidate-storage, ECR, and secret-metadata foundation.
+4. `infra/terraform/environments/dev-runtime` stores state at
+   `talon/dev/runtime/terraform.tfstate` and consumes foundation outputs through remote state.
+5. GitHub Actions assumes `talon-dev-github-terraform-vraj` through OIDC, saves plans, builds
+   commit-SHA images, and applies each exact plan. No AWS key or runtime secret is stored in GitHub.
 
 ## Files and modules affected
 
 - `infra/terraform/bootstrap/`
 - `infra/terraform/environments/dev/`
+- `infra/terraform/environments/dev-runtime/`
 - `.github/workflows/terraform-apply.yml`
 - `.gitignore`
 - `docs/architecture/aws-terraform-design.md`
@@ -73,7 +79,7 @@ ECS is intentionally not part of this checkpoint.
    - `TF_STATE_BUCKET=talon-dev-762079300828-ap-south-1-tfstate-vraj`
 2. Review and merge the feature branch to `main`, then observe the first GitHub Actions apply. The
    local machine has no GitHub CLI, so repository variables cannot be configured from this session.
-3. Run the API with the current short-lived AWS login credentials and S3 provider settings; import a
-   real public Drive PDF and verify an opaque object exists in private S3 without logging its URL,
-   candidate identity, or object key.
-4. Only after the real transfer is reliable should ECS/networking/secrets infrastructure be added.
+3. Tag and push the locally verified API and web images using the source commit SHA, apply the
+   runtime root with a reviewed `/32` ingress CIDR, and smoke the generated ALB URL.
+4. Run an import containing a real public Drive PDF and verify an opaque object exists in private S3
+   without logging its URL, candidate identity, or object key.

@@ -116,7 +116,7 @@ The canonical criteria supports:
 - bounded limit and opaque cursor.
 
 The versioned DSL is JSON, not SQL. Each predicate is `{field, operator, value}`; fields define
-allowed operators/types. Grok receives only query text, locale/time-zone context needed to parse it,
+allowed operators/types. Groq receives only query text, locale/time-zone context needed to parse it,
 and the schema. Validation returns normalized criteria plus display chips. Repository adapters use
 Criteria/JDBC parameters and workspace predicates; no model string becomes a SQL fragment.
 

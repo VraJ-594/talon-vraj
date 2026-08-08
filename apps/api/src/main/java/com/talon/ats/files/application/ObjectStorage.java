@@ -1,6 +1,9 @@
 package com.talon.ats.files.application;
 
 import java.io.InputStream;
+import java.net.URI;
+import java.time.Duration;
+import java.util.Optional;
 
 public interface ObjectStorage {
 
@@ -13,4 +16,9 @@ public interface ObjectStorage {
   void delete(PrivateObjectKey key);
 
   void promote(PrivateObjectKey quarantine, PrivateObjectKey clean);
+
+  default Optional<URI> presignCleanDownload(
+      PrivateObjectKey clean, Duration lifetime, String downloadFileName) {
+    return Optional.empty();
+  }
 }

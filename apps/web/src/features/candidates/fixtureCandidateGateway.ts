@@ -108,7 +108,10 @@ export function createFixtureCandidateGateway(
 ): CandidateGateway {
   return {
     async listApplications() {
-      return APPLICATIONS.map((application) => applyPermissions(application, permissions));
+      return {
+        items: APPLICATIONS.map((application) => applyPermissions(application, permissions)),
+        nextCursor: null,
+      };
     },
     async getApplication(applicationId) {
       const detail = APPLICATION_DETAILS[applicationId];

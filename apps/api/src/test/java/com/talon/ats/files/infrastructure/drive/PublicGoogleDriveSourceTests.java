@@ -131,6 +131,33 @@ class PublicGoogleDriveSourceTests {
   }
 
   @Test
+  void acceptsDriveBinaryContentTypeOnlyWhenThePayloadHasAPdfSignature() throws Exception {
+    for (String contentType : List.of("application/octet-stream", "application/binary")) {
+      StubTransport validBinary =
+          new StubTransport(
+              response(200, Map.of("content-type", List.of(contentType)), "%PDF-demo"));
+
+      ExternalFileMetadata metadata =
+          source(validBinary, publicResolver(), defaults())
+              .fetch(reference(), copyingSink(new ByteArrayOutputStream()));
+
+      assertThat(metadata.contentType()).isEqualTo("application/pdf");
+      assertThat(metadata.sizeBytes()).isEqualTo(9);
+    }
+
+    assertFailure(
+        source(
+            new StubTransport(
+                response(
+                    200, Map.of("content-type", List.of("application/octet-stream")), "not-a-pdf")),
+            publicResolver(),
+            defaults()),
+        reference().uri().toString(),
+        "INVALID_FILE_TYPE",
+        false);
+  }
+
+  @Test
   void treatsHtmlAndPermissionResponsesAsNonRetryableAuthenticationFailures() {
     for (DriveHttpResponse response :
         List.of(

@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import App from './App';
 import type { AuthGateway } from '../features/auth/authGateway';
@@ -66,6 +66,43 @@ describe('Talon application shell', () => {
     ).toBeInTheDocument();
   });
 
+  it('restores a direct candidate application profile route inside the protected shell', async () => {
+    window.history.replaceState({}, '', '/candidates/applications/application-nila-backend');
+
+    render(
+      <App authGateway={authenticatedGateway} candidateGateway={createFixtureCandidateGateway()} />,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Nila Raman' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Candidate profile' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Candidates' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(window.location.pathname).toBe('/candidates/applications/application-nila-backend');
+  });
+
+  it('rejects an invalid candidate application identifier during protected-route restoration', async () => {
+    window.history.replaceState({}, '', '/candidates/applications/not.valid');
+    const fixtureCandidates = createFixtureCandidateGateway();
+    const getApplication = vi.fn(fixtureCandidates.getApplication);
+
+    render(
+      <App
+        authGateway={authenticatedGateway}
+        candidateGateway={{ ...fixtureCandidates, getApplication }}
+      />,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Return to Candidates' })).toHaveAttribute(
+      'href',
+      '/candidates',
+    );
+    expect(getApplication).not.toHaveBeenCalled();
+    expect(screen.queryByRole('heading', { name: 'Candidate profile' })).not.toBeInTheDocument();
+  });
+
   it('moves from an empty candidate roster to import without reloading the session', async () => {
     const user = userEvent.setup();
     const fixtureCandidates = createFixtureCandidateGateway();
@@ -73,7 +110,10 @@ describe('Talon application shell', () => {
     render(
       <App
         authGateway={authenticatedGateway}
-        candidateGateway={{ ...fixtureCandidates, listApplications: async () => [] }}
+        candidateGateway={{
+          ...fixtureCandidates,
+          listApplications: async () => ({ items: [], nextCursor: null }),
+        }}
         importGateway={createFixtureImportGateway()}
         jobGateway={createFixtureJobGateway()}
       />,

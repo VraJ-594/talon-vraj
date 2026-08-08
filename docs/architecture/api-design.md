@@ -28,13 +28,17 @@ OAuth, TOTP/2FA, password reset, invitations, and member-management endpoints ar
 |---|---|---|
 | `GET` | `/jobs?status=&cursor=&limit=` | Jobs available as import targets |
 | `POST` | `/jobs` | Create minimal job (Admin/Recruiter) |
+| `GET` | `/applications?cursor=&limit=` | Newest-first application pipeline page |
 | `GET` | `/candidates` | Typed candidate search/list query |
 | `GET` | `/candidates/{candidateId}` | Candidate plus applications/profile summary |
 | `GET` | `/applications/{applicationId}` | Selected application/form/resume summary |
 | `GET` | `/applications/{applicationId}/resume-download` | Five-minute authorized private GET URL |
 
-Candidate list accepts `q`, repeatable/encoded filters, allowlisted `sort`, `cursor`, and `limit`.
-The server remains authoritative for workspace, role, and sensitive-field visibility.
+The application pipeline intentionally returns one row per application, so the same candidate can
+appear under different jobs. It uses an opaque newest-first seek cursor and a bounded `limit` of
+`1..100`. Candidate search accepts text, typed filters, allowlisted sort, cursor, and limit through
+the endpoints in section 6. The server remains authoritative for workspace, role, and
+sensitive-field visibility.
 
 ## 4. CSV template and import
 
@@ -81,7 +85,7 @@ URLs, private object keys, and presigned URLs. Artifacts expire after seven days
 `/interpret` accepts `{query, locale?, timezone?}`. It returns `{dslVersion, criteria, chips,
 warnings}` only after backend validation. It does not execute automatically unless the client then
 submits `criteria` to `/query`. `/query` supports text, predicates, allowlisted sort, cursor, and
-limit. Standard Cmd+K never invokes Grok.
+limit. Standard Cmd+K never invokes Groq.
 
 Natural-language errors distinguish `INTERPRETER_DISABLED`, `INTERPRETER_UNAVAILABLE`,
 `INTERPRETATION_INVALID`, and `AMBIGUOUS_CURRENCY`. Clients retain the original query and explicit

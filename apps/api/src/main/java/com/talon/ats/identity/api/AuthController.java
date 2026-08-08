@@ -6,15 +6,16 @@ import com.talon.ats.identity.application.AuthenticationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,12 +28,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
   static final String REFRESH_COOKIE_NAME = "talon_refresh";
-  private static final Duration REFRESH_COOKIE_MAX_AGE = Duration.ofDays(7);
 
   private final AuthenticationService authenticationService;
+  private final boolean secureCookie;
 
-  public AuthController(AuthenticationService authenticationService) {
+  public AuthController(
+      AuthenticationService authenticationService,
+      @Value("${talon.security.cookie-secure:true}") boolean secureCookie) {
     this.authenticationService = authenticationService;
+    this.secureCookie = secureCookie;
   }
 
   @PostMapping("/auth/login")
@@ -40,18 +44,27 @@ public class AuthController {
     AuthenticationResult result =
         authenticationService.authenticate(
             new AuthenticateCommand(request.email(), request.password()));
-    ResponseCookie refreshCookie =
-        ResponseCookie.from(REFRESH_COOKIE_NAME, result.refreshToken())
-            .httpOnly(true)
-            .secure(true)
-            .sameSite("Strict")
-            .path("/api/v1/auth")
-            .maxAge(REFRESH_COOKIE_MAX_AGE)
-            .build();
-
     return ResponseEntity.ok()
-        .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+        .header(HttpHeaders.SET_COOKIE, refreshCookie(result.refreshToken()).toString())
         .body(LoginResponse.from(result));
+  }
+
+  @PostMapping("/auth/refresh")
+  ResponseEntity<LoginResponse> refresh(
+      @CookieValue(name = REFRESH_COOKIE_NAME, required = false) String refreshToken) {
+    AuthenticationResult result = authenticationService.refresh(refreshToken);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.SET_COOKIE, refreshCookie(result.refreshToken()).toString())
+        .body(LoginResponse.from(result));
+  }
+
+  @PostMapping("/auth/logout")
+  ResponseEntity<Void> logout(
+      @CookieValue(name = REFRESH_COOKIE_NAME, required = false) String refreshToken) {
+    authenticationService.logout(refreshToken);
+    return ResponseEntity.noContent()
+        .header(HttpHeaders.SET_COOKIE, expiredRefreshCookie().toString())
+        .build();
   }
 
   @GetMapping("/session")
@@ -89,4 +102,23 @@ public class AuthController {
 
   record SessionResponse(
       UUID userId, UUID workspaceId, String workspaceName, String role, String displayName) {}
+
+  private ResponseCookie refreshCookie(String value) {
+    return ResponseCookie.from(REFRESH_COOKIE_NAME, value)
+        .httpOnly(true)
+        .secure(secureCookie)
+        .sameSite("Strict")
+        .path("/api/v1/auth")
+        .build();
+  }
+
+  private ResponseCookie expiredRefreshCookie() {
+    return ResponseCookie.from(REFRESH_COOKIE_NAME, "")
+        .httpOnly(true)
+        .secure(secureCookie)
+        .sameSite("Strict")
+        .path("/api/v1/auth")
+        .maxAge(0)
+        .build();
+  }
 }

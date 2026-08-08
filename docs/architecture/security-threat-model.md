@@ -4,7 +4,7 @@
 
 Protect candidate PII, credentials, tenant isolation, private files, and search confidentiality.
 Trust boundaries exist at browser/API, API/PostgreSQL, API/worker/queue, worker/public Drive,
-worker/scanner/object storage, API/Grok, and operator/Terraform/cloud account.
+worker/scanner/object storage, API/Groq, and operator/Terraform/cloud account.
 
 All browser input, CSV cells, URLs, model output, queue messages, object metadata, and provider
 responses are untrusted. TLS is required across network boundaries.
@@ -63,7 +63,7 @@ capability and is protected accordingly.
 
 ## 6. Natural-language search privacy
 
-Grok receives the user's natural-language query, the restricted DSL schema/version, and minimal
+Groq receives the user's natural-language query, the restricted DSL schema/version, and minimal
 locale context only. It receives no candidate rows, resumes, emails, object keys, SQL, credentials,
 or tenant secrets. Output is data, never instructions: reject unknown fields/operators, invalid
 types/ranges/currency, excessive predicates, and non-allowlisted sorts. Timeouts/retries are bounded
@@ -71,7 +71,7 @@ and deterministic search remains available when the provider is disabled or fail
 
 ## 7. Secrets, network, and operations
 
-Secrets Manager/runtime secret injection supplies database credentials, JWT keys, xAI key, and
+Secrets Manager/runtime secret injection supplies database credentials, JWT keys, Groq key, and
 provider configuration. Terraform state is encrypted/access-controlled and never committed. ECS
 tasks use least-privilege roles; private subnets and security-group references restrict traffic;
 CloudFront/ALB apply TLS, headers, size limits, and rate controls. Production logs/metrics/audit
@@ -86,6 +86,6 @@ property/allowlist tests, dependency/container scans, and Playwright role journe
 Residual risks/gates:
 
 - anonymous Drive links can be shared outside Talon; this is a demo prerequisite, not final intake;
-- real malware scanner effectiveness and xAI data-processing terms need operational approval;
+- real malware scanner effectiveness and Groq data-processing terms need operational approval;
 - app-owned auth lacks MFA/reset/federation until those deferred flows are implemented;
 - Supabase Free is a demo tier and needs approved production backup/PITR availability before launch.

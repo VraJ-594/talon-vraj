@@ -1,14 +1,8 @@
 export type ResumeFileStatus =
-  | 'FETCHING_RESUME'
-  | 'RESUME_QUARANTINED'
-  | 'SCAN_PENDING'
-  | 'EXTRACTING_TEXT'
-  | 'CLEAN'
-  | 'FAILED'
-  | 'UNSAFE_FILE';
+  'NO_RESUME' | 'QUARANTINED' | 'SCAN_PENDING' | 'CLEAN' | 'FAILED' | 'UNSAFE';
 
 export type AnnualCompensation = {
-  readonly currency: 'INR' | 'USD';
+  readonly currency: string;
   readonly minorUnits: number;
 };
 
@@ -23,8 +17,8 @@ export type CandidateApplicationSummary = {
   readonly currentCompany: string;
   readonly currentTitle: string;
   readonly skills: readonly string[];
-  readonly currentCompensation?: AnnualCompensation;
-  readonly expectedCompensation?: AnnualCompensation;
+  readonly currentCompensation?: AnnualCompensation | null;
+  readonly expectedCompensation?: AnnualCompensation | null;
   readonly noticePeriodDays: number;
   readonly applicationDate: string;
   readonly resumeStatus: ResumeFileStatus;
@@ -39,10 +33,15 @@ export type CandidateApplicationDetail = CandidateApplicationSummary & {
   readonly email: string;
   readonly maskedPhone: string;
   readonly source: string;
-  readonly availableFrom: string;
+  readonly availableFrom: string | null;
   readonly additionalAnswers: readonly AdditionalApplicationAnswer[];
   readonly resumeFileName: string;
   readonly resumeDownloadAllowed: boolean;
+};
+
+export type CandidateApplicationPage = {
+  readonly items: readonly CandidateApplicationSummary[];
+  readonly nextCursor: string | null;
 };
 
 export type CandidateGatewayErrorCode =
@@ -59,7 +58,7 @@ export class CandidateGatewayError extends Error {
 }
 
 export interface CandidateGateway {
-  listApplications(): Promise<readonly CandidateApplicationSummary[]>;
+  listApplications(cursor?: string | null): Promise<CandidateApplicationPage>;
   getApplication(applicationId: string): Promise<CandidateApplicationDetail>;
   downloadResume(applicationId: string): Promise<Blob>;
 }

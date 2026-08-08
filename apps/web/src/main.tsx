@@ -3,12 +3,11 @@ import { createRoot } from 'react-dom/client';
 
 import App from './app/App';
 import { AppErrorBoundary } from './app/AppErrorBoundary';
-import { createRuntimeAuthGateway } from './features/auth/runtimeAuthGateway';
-import { createFixtureCandidateGateway } from './features/candidates/fixtureCandidateGateway';
-import { createFixtureJobGateway } from './features/jobs/fixtureJobGateway';
+import { HttpAuthGateway } from './features/auth/httpAuthGateway';
+import { HttpCandidateGateway } from './features/candidates/httpCandidateGateway';
 import { HttpJobGateway } from './features/jobs/httpJobGateway';
-import { createFixtureImportGateway } from './features/imports/fixtureImportGateway';
 import { HttpImportGateway } from './features/imports/httpImportGateway';
+import { HttpSearchGateway } from './features/search/httpSearchGateway';
 import { ApiClient } from './lib/apiClient';
 import './styles.css';
 
@@ -19,17 +18,12 @@ if (!root) {
 }
 
 async function bootstrap() {
-  const fixtureMode = import.meta.env.DEV && import.meta.env.VITE_AUTH_MODE === 'fixture';
   const apiClient = new ApiClient(import.meta.env.VITE_API_BASE_URL, fetch);
-  const fixtureFactory = fixtureMode
-    ? (await import('./features/auth/fixtureAuthGateway')).createFixtureAuthGateway
-    : undefined;
-  const authGateway = createRuntimeAuthGateway(import.meta.env, apiClient, fixtureFactory);
-  const candidateGateway = createFixtureCandidateGateway();
-  const jobGateway = fixtureMode ? createFixtureJobGateway() : new HttpJobGateway(apiClient);
-  const importGateway = fixtureMode
-    ? createFixtureImportGateway()
-    : new HttpImportGateway(apiClient);
+  const authGateway = new HttpAuthGateway(apiClient);
+  const candidateGateway = new HttpCandidateGateway(apiClient);
+  const jobGateway = new HttpJobGateway(apiClient);
+  const importGateway = new HttpImportGateway(apiClient);
+  const searchGateway = new HttpSearchGateway(apiClient);
 
   createRoot(root!).render(
     <StrictMode>
@@ -39,6 +33,7 @@ async function bootstrap() {
           candidateGateway={candidateGateway}
           importGateway={importGateway}
           jobGateway={jobGateway}
+          searchGateway={searchGateway}
         />
       </AppErrorBoundary>
     </StrictMode>,

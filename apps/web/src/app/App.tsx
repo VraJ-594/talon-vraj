@@ -8,11 +8,15 @@ import {
   type AuthGateway,
 } from '../features/auth/authGateway';
 import { SignInPage } from '../features/auth/SignInPage';
+import { CandidateApplicationProfilePage } from '../features/candidates/CandidateApplicationProfilePage';
 import { CandidateWorkspace } from '../features/candidates/CandidateWorkspace';
 import type { CandidateGateway } from '../features/candidates/candidateGateway';
 import { ImportWizard } from '../features/imports/ImportWizard';
 import { isOpaqueImportId, type ImportGateway } from '../features/imports/importGateway';
 import type { JobGateway } from '../features/jobs/jobGateway';
+import { CommandPalette } from '../features/search/CommandPalette';
+import type { SearchGateway } from '../features/search/searchGateway';
+import { SearchWorkspace } from '../features/search/SearchWorkspace';
 
 type PriorityRoute = {
   readonly path: '/candidates' | '/imports' | '/search';
@@ -50,7 +54,18 @@ function isPriorityRoutePath(path: string): path is PriorityRoute['path'] {
   return priorityRoutes.some((route) => route.path === path);
 }
 
-function requestedLocation(path: string): PriorityRoute['path'] | `/imports?importId=${string}` {
+function candidateApplicationId(path: string): string | null {
+  const match = /^\/candidates\/applications\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})$/.exec(path);
+  return match?.[1] ?? null;
+}
+
+function requestedLocation(
+  path: string,
+): PriorityRoute['path'] | `/imports?importId=${string}` | `/candidates/applications/${string}` {
+  const applicationId = candidateApplicationId(path);
+  if (applicationId) {
+    return `/candidates/applications/${applicationId}`;
+  }
   if (!isPriorityRoutePath(path)) {
     return '/candidates';
   }
@@ -68,6 +83,7 @@ type AppProps = {
   readonly candidateGateway?: CandidateGateway;
   readonly importGateway?: ImportGateway;
   readonly jobGateway?: JobGateway;
+  readonly searchGateway?: SearchGateway;
 };
 
 const unconfiguredAuthGateway: AuthGateway = {
@@ -197,6 +213,7 @@ function ProtectedWorkspace({
   jobGateway,
   loggingOut,
   onLogout,
+  searchGateway,
   session,
 }: {
   readonly candidateGateway?: CandidateGateway;
@@ -204,10 +221,14 @@ function ProtectedWorkspace({
   readonly jobGateway: JobGateway;
   readonly loggingOut: boolean;
   readonly onLogout: () => Promise<void>;
+  readonly searchGateway?: SearchGateway;
   readonly session: AuthenticatedSession;
 }) {
-  const [currentPath] = useLocation();
-  const route = priorityRoutes.find((candidate) => candidate.path === currentPath);
+  const [currentPath, navigate] = useLocation();
+  const applicationId = candidateApplicationId(currentPath);
+  const route = applicationId
+    ? priorityRoutes.find((candidate) => candidate.path === '/candidates')
+    : priorityRoutes.find((candidate) => candidate.path === currentPath);
 
   if (!route) {
     return (
@@ -221,24 +242,34 @@ function ProtectedWorkspace({
   return (
     <div className="app-shell">
       <Sidebar
-        currentPath={currentPath}
+        currentPath={applicationId ? '/candidates' : currentPath}
         loggingOut={loggingOut}
         onLogout={onLogout}
         session={session}
       />
+      {searchGateway ? <CommandPalette searchGateway={searchGateway} /> : null}
       <div className="app-content">
         <header className="topbar">
-          <h1>{route.pageTitle}</h1>
+          <h1>{applicationId ? 'Candidate profile' : route.pageTitle}</h1>
           <Link className="topbar-search-link" href="/search">
             <Search aria-hidden="true" size={17} />
             Search candidates
           </Link>
         </header>
         <main className="workspace priority-workspace">
-          {route.path === '/candidates' && candidateGateway ? (
+          {applicationId && candidateGateway ? (
+            <CandidateApplicationProfilePage
+              applicationId={applicationId}
+              candidateGateway={candidateGateway}
+              role={session.role}
+              onBack={() => navigate('/candidates')}
+            />
+          ) : route.path === '/candidates' && candidateGateway ? (
             <CandidateWorkspace candidateGateway={candidateGateway} role={session.role} />
           ) : route.path === '/imports' ? (
             <ImportWizard importGateway={importGateway} jobGateway={jobGateway} />
+          ) : route.path === '/search' && searchGateway ? (
+            <SearchWorkspace searchGateway={searchGateway} />
           ) : (
             <section className="priority-placeholder" aria-label={`${route.pageTitle} foundation`}>
               <p>{route.description}</p>
@@ -250,16 +281,36 @@ function ProtectedWorkspace({
   );
 }
 
+function SessionRestoringScreen() {
+  return (
+    <main className="session-restoring-page" aria-label="Restoring session" aria-busy="true">
+      <div className="brand" aria-hidden="true">
+        <span className="brand-mark">
+          <span />
+        </span>
+        <span>Talon</span>
+      </div>
+      <span className="session-restoring-spinner" aria-hidden="true" />
+      <span className="sr-only" role="status">
+        Restoring your session
+      </span>
+    </main>
+  );
+}
+
 export default function App({
   authGateway = unconfiguredAuthGateway,
   candidateGateway,
   importGateway = unconfiguredImportGateway,
   jobGateway = unconfiguredJobGateway,
+  searchGateway,
 }: AppProps) {
   const [currentPath, navigate] = useLocation();
   const requestedRoute = useRef(requestedLocation(currentPath));
   const [loggingOut, setLoggingOut] = useState(false);
-  const [session, setSession] = useState<AuthenticatedSession | null | undefined>(undefined);
+  const [session, setSession] = useState<AuthenticatedSession | null | undefined>(() =>
+    authGateway.cachedSession?.(),
+  );
   const [sessionMessage, setSessionMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -295,7 +346,7 @@ export default function App({
   }, [authGateway, navigate]);
 
   if (session === undefined) {
-    return <main aria-label="Restoring session">Loading your workspace…</main>;
+    return <SessionRestoringScreen />;
   }
 
   if (!session) {
@@ -327,6 +378,7 @@ export default function App({
           setLoggingOut(false);
         }
       }}
+      searchGateway={searchGateway}
       session={session}
     />
   );

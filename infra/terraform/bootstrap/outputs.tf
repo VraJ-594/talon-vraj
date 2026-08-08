@@ -17,3 +17,8 @@ output "development_state_key" {
   description = "S3 object key used by the development Terraform root."
   value       = local.state_key
 }
+
+output "development_runtime_state_key" {
+  description = "S3 object key used by the development ECS runtime root."
+  value       = local.runtime_state_key
+}

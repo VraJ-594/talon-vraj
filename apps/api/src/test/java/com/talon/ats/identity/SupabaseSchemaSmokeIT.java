@@ -38,6 +38,16 @@ class SupabaseSchemaSmokeIT {
       assertThat(exists(statement, "SELECT to_regclass('public.candidate_import_row') IS NOT NULL"))
           .isTrue();
       assertThat(
+              exists(
+                  statement,
+                  "SELECT to_regclass('public.candidate_search_document_gin_idx') IS NOT NULL"))
+          .isTrue();
+      assertThat(
+              exists(
+                  statement,
+                  "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='candidate' AND column_name='search_document')"))
+          .isTrue();
+      assertThat(
               exists(statement, "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='talon_app')"))
           .isTrue();
       assertThat(
