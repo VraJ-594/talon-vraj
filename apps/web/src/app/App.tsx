@@ -89,10 +89,17 @@ const unconfiguredJobGateway: JobGateway = {
 };
 
 const unconfiguredImportGateway: ImportGateway = {
+  processingAvailable: false,
+  async downloadTemplate() {
+    throw new Error('Import gateway is not configured');
+  },
   async uploadCsv() {
     throw new Error('Import gateway is not configured');
   },
   async validate() {
+    throw new Error('Import gateway is not configured');
+  },
+  async getPreview() {
     throw new Error('Import gateway is not configured');
   },
   async confirm() {

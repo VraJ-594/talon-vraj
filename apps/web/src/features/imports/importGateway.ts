@@ -65,6 +65,7 @@ export type ImportPreview = {
   readonly issues: readonly {
     readonly rowNumber: number;
     readonly kind: 'INVALID' | 'DUPLICATE';
+    readonly code?: string;
     readonly message: string;
   }[];
 };
@@ -113,12 +114,15 @@ export type ImportProgress = {
 };
 
 export interface ImportGateway {
+  readonly processingAvailable?: boolean;
+  downloadTemplate?(): Promise<Blob>;
   uploadCsv(input: { readonly jobId: string; readonly file: File }): Promise<ImportDraft>;
   validate(input: {
     readonly importId: string;
     readonly mapping: ColumnMapping;
     readonly retainUnmapped: boolean;
   }): Promise<ImportPreview>;
+  getPreview?(importId: string): Promise<ImportPreview>;
   confirm(input: {
     readonly importId: string;
     readonly idempotencyKey: string;

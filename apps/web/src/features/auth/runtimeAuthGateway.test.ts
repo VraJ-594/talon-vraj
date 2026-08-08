@@ -3,10 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { createFixtureAuthGateway } from './fixtureAuthGateway';
 import { HttpAuthGateway } from './httpAuthGateway';
 import { createRuntimeAuthGateway } from './runtimeAuthGateway';
+import { ApiClient } from '../../lib/apiClient';
 
 describe('runtime authentication selection', () => {
   it('uses HTTP authentication by default', () => {
-    const gateway = createRuntimeAuthGateway({ DEV: true }, vi.fn<typeof fetch>());
+    const gateway = createRuntimeAuthGateway(
+      { DEV: true },
+      new ApiClient('', vi.fn<typeof fetch>()),
+    );
 
     expect(gateway).toBeInstanceOf(HttpAuthGateway);
   });
@@ -14,7 +18,7 @@ describe('runtime authentication selection', () => {
   it('allows fixture authentication only through an explicit development opt-in', async () => {
     const gateway = createRuntimeAuthGateway(
       { DEV: true, VITE_AUTH_MODE: 'fixture' },
-      vi.fn<typeof fetch>(),
+      new ApiClient('', vi.fn<typeof fetch>()),
       createFixtureAuthGateway,
     );
 
@@ -26,7 +30,7 @@ describe('runtime authentication selection', () => {
   it('ignores fixture mode in production', () => {
     const gateway = createRuntimeAuthGateway(
       { DEV: false, VITE_AUTH_MODE: 'fixture' },
-      vi.fn<typeof fetch>(),
+      new ApiClient('', vi.fn<typeof fetch>()),
     );
 
     expect(gateway).toBeInstanceOf(HttpAuthGateway);

@@ -75,10 +75,11 @@ const RESULT_STATUS_LABELS: Readonly<
 };
 
 type ImportOperation =
-  'restore' | 'upload' | 'validate' | 'confirm' | 'refresh' | 'retry' | 'download';
+  'restore' | 'template' | 'upload' | 'validate' | 'confirm' | 'refresh' | 'retry' | 'download';
 
 const OPERATION_FAILURE_MESSAGES: Readonly<Record<ImportOperation, string>> = {
   restore: 'Import progress couldn’t be loaded. Try again.',
+  template: 'The CSV template couldn’t be downloaded. Try again.',
   upload: 'The CSV couldn’t be uploaded. Check the file and try again.',
   validate: 'The rows couldn’t be validated. Review the CSV and try again.',
   confirm: 'The import couldn’t be confirmed. Try again.',
@@ -194,14 +195,23 @@ export function ImportWizard({
     setPendingOperation('restore');
     setOperationError(null);
     setRestoreFailed(false);
-    void importGateway
-      .getImport(importId)
-      .then((restored) => {
+    void (async () => {
+      if (importGateway.processingAvailable === false) {
+        if (!importGateway.getPreview) throw new Error('Preview restoration is unavailable');
+        const restored = await importGateway.getPreview(importId);
         if (active) {
-          setProgress(restored);
-          setStep(isTerminalStatus(restored.status) ? 'RESULTS' : 'PROGRESS');
+          setPreview(restored);
+          setStep('PREVIEW');
         }
-      })
+        return;
+      }
+
+      const restored = await importGateway.getImport(importId);
+      if (active) {
+        setProgress(restored);
+        setStep(isTerminalStatus(restored.status) ? 'RESULTS' : 'PROGRESS');
+      }
+    })()
       .catch((error: unknown) => {
         if (active) {
           setOperationError(safeImportError(error, 'restore'));
@@ -218,14 +228,28 @@ export function ImportWizard({
   }, [importGateway, restoreAttempt]);
 
   const downloadTemplate = () => {
-    const header =
-      'first_name,last_name,email,resume_drive_url,phone,location,total_experience_years,current_company,current_title,skills,current_ctc,expected_ctc,ctc_unit,ctc_currency,notice_period_days,availability_date,source,application_date\r\n';
-    const url = URL.createObjectURL(new Blob([header], { type: 'text/csv;charset=utf-8' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'talon-application-import-template.csv';
-    anchor.click();
-    URL.revokeObjectURL(url);
+    setPendingOperation('template');
+    setOperationError(null);
+    void (importGateway.downloadTemplate
+      ? importGateway.downloadTemplate()
+      : Promise.resolve(
+          new Blob(
+            [
+              'first_name,last_name,email,resume_drive_url,phone,location,total_experience_years,current_company,current_title,skills,current_ctc,expected_ctc,ctc_unit,ctc_currency,notice_period_days,availability_date,source,application_date\r\n',
+            ],
+            { type: 'text/csv;charset=utf-8' },
+          ),
+        ))
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'talon-candidate-import.csv';
+        anchor.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch((error: unknown) => setOperationError(safeImportError(error, 'template')))
+      .finally(() => setPendingOperation(null));
   };
 
   return (
@@ -437,9 +461,16 @@ export function ImportWizard({
               </article>
             ))}
           </div>
-          <button className="primary-button" type="button" onClick={() => setStep('CONFIRM')}>
-            Continue to confirmation
-          </button>
+          {importGateway.processingAvailable ? (
+            <button className="primary-button" type="button" onClick={() => setStep('CONFIRM')}>
+              Continue to confirmation
+            </button>
+          ) : (
+            <div className="import-notice" role="status">
+              Validation preview is saved. Candidate creation and resume transfer begin in the next
+              processing checkpoint.
+            </div>
+          )}
         </div>
       ) : step === 'MAP' && draft ? (
         <div className="mapping-step">
@@ -512,10 +543,11 @@ export function ImportWizard({
           <button
             className="secondary-button template-button"
             type="button"
+            disabled={pendingOperation !== null}
             onClick={downloadTemplate}
           >
             <Download aria-hidden="true" size={17} />
-            Download CSV template
+            {pendingOperation === 'template' ? 'Downloading…' : 'Download CSV template'}
           </button>
           <label className="file-drop">
             <FileSpreadsheet aria-hidden="true" size={28} />

@@ -223,6 +223,15 @@ export function createFixtureImportGateway(): ImportGateway {
   };
 
   return {
+    processingAvailable: true,
+    async downloadTemplate() {
+      return new Blob(
+        [
+          `${CANONICAL_FIELDS.join(',')}\r\nAda,Lovelace,ada@example.com,https://drive.google.com/file/d/demo/view,,,,,,,,,,,,,,\r\n`,
+        ],
+        { type: 'text/csv;charset=utf-8' },
+      );
+    },
     async uploadCsv({ file, jobId }): Promise<ImportDraft> {
       if (file.size > MAX_FILE_BYTES) {
         throw problem('FILE_TOO_LARGE', 'Choose a CSV no larger than 10 MB.');
@@ -291,6 +300,7 @@ export function createFixtureImportGateway(): ImportGateway {
                 {
                   rowNumber: 2,
                   kind: 'INVALID' as const,
+                  code: 'INVALID_RESUME_URL',
                   message: 'Resume URL is not an anonymously readable Drive PDF.',
                 },
               ]
@@ -300,11 +310,21 @@ export function createFixtureImportGateway(): ImportGateway {
                 {
                   rowNumber: 3,
                   kind: 'DUPLICATE' as const,
+                  code: 'DUPLICATE_APPLICATION',
                   message: 'An application already exists for this job.',
                 },
               ]
             : []),
         ],
+      };
+    },
+    async getPreview(importId) {
+      const record = findImport(importId);
+      return {
+        validCount: record.rowCount,
+        invalidCount: 0,
+        duplicateCount: 0,
+        issues: [],
       };
     },
     async confirm({ idempotencyKey, importId }) {

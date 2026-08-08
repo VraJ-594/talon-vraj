@@ -1,6 +1,6 @@
 import type { AuthGateway } from './authGateway';
 import { HttpAuthGateway } from './httpAuthGateway';
-import { ApiClient, type ApiFetcher } from '../../lib/apiClient';
+import type { ApiClient } from '../../lib/apiClient';
 
 type RuntimeAuthEnvironment = {
   readonly DEV: boolean;
@@ -10,12 +10,12 @@ type RuntimeAuthEnvironment = {
 
 export function createRuntimeAuthGateway(
   environment: RuntimeAuthEnvironment,
-  fetcher: ApiFetcher = fetch,
+  apiClient: ApiClient,
   fixtureFactory?: () => AuthGateway,
 ): AuthGateway {
   if (environment.DEV && environment.VITE_AUTH_MODE === 'fixture') {
     if (!fixtureFactory) throw new Error('Fixture authentication is unavailable');
     return fixtureFactory();
   }
-  return new HttpAuthGateway(new ApiClient(environment.VITE_API_BASE_URL, fetcher));
+  return new HttpAuthGateway(apiClient);
 }
