@@ -9,7 +9,7 @@ public interface CandidateImportAccess {
 
   Result createOrMatch(Actor actor, Application application);
 
-  default void attachResume(Actor actor, UUID applicationId, Resume resume) {
+  default UUID attachResume(Actor actor, UUID applicationId, Resume resume) {
     throw new UnsupportedOperationException("candidate resume persistence is unavailable");
   }
 

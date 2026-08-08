@@ -60,20 +60,21 @@ public final class JdbcCandidateImportAccess implements CandidateImportAccess {
   }
 
   @Override
-  public void attachResume(Actor actor, UUID applicationId, Resume resume) {
+  public UUID attachResume(Actor actor, UUID applicationId, Resume resume) {
     Objects.requireNonNull(actor);
     Objects.requireNonNull(applicationId);
     Objects.requireNonNull(resume);
-    transactions.executeWithoutResult(
-        status -> {
-          jdbc.queryForObject(
-              "SELECT set_config('app.current_workspace_id', ?, true)",
-              String.class,
-              actor.workspaceId().toString());
-          jdbc.execute("SET LOCAL ROLE talon_app");
-          Instant now = Instant.now();
-          jdbc.update(
-              """
+    return Objects.requireNonNull(
+        transactions.execute(
+            status -> {
+              jdbc.queryForObject(
+                  "SELECT set_config('app.current_workspace_id', ?, true)",
+                  String.class,
+                  actor.workspaceId().toString());
+              jdbc.execute("SET LOCAL ROLE talon_app");
+              Instant now = Instant.now();
+              return jdbc.queryForObject(
+                  """
               INSERT INTO candidate_file(
                   id, workspace_id, application_id, file_name, object_key, status,
                   content_type, size_bytes, created_at, updated_at)
@@ -82,18 +83,20 @@ public final class JdbcCandidateImportAccess implements CandidateImportAccess {
               SET file_name = EXCLUDED.file_name, object_key = EXCLUDED.object_key,
                   status = EXCLUDED.status, content_type = EXCLUDED.content_type,
                   size_bytes = EXCLUDED.size_bytes, updated_at = EXCLUDED.updated_at
+              RETURNING id
               """,
-              resume.fileId(),
-              actor.workspaceId(),
-              applicationId,
-              resume.fileName(),
-              resume.objectKey(),
-              resume.status(),
-              resume.contentType(),
-              resume.sizeBytes(),
-              Timestamp.from(now),
-              Timestamp.from(now));
-        });
+                  UUID.class,
+                  resume.fileId(),
+                  actor.workspaceId(),
+                  applicationId,
+                  resume.fileName(),
+                  resume.objectKey(),
+                  resume.status(),
+                  resume.contentType(),
+                  resume.sizeBytes(),
+                  Timestamp.from(now),
+                  Timestamp.from(now));
+            }));
   }
 
   private static AnnualCompensation money(Money money) {

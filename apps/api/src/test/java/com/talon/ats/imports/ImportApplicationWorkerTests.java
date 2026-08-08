@@ -32,6 +32,77 @@ import org.mockito.ArgumentCaptor;
 class ImportApplicationWorkerTests {
 
   @Test
+  void recordsThePersistedResumeIdentityWhenAnApplicationResumeIsReplaced() {
+    UUID userId = UUID.randomUUID();
+    UUID workspaceId = UUID.randomUUID();
+    UUID jobId = UUID.randomUUID();
+    UUID importId = UUID.randomUUID();
+    UUID candidateId = UUID.randomUUID();
+    UUID applicationId = UUID.randomUUID();
+    UUID uploadedFileId = UUID.randomUUID();
+    UUID persistedFileId = UUID.randomUUID();
+    Instant now = Instant.parse("2026-08-08T10:00:00Z");
+    ImportDraftRepository repository = mock(ImportDraftRepository.class);
+    CandidateImportAccess candidates = mock(CandidateImportAccess.class);
+    ResumeTransferService resumes = mock(ResumeTransferService.class);
+    ImportDraftService.Actor actor =
+        new ImportDraftService.Actor(userId, workspaceId, WorkspaceRole.WORKSPACE_ADMIN);
+    ImportDraft draft =
+        new ImportDraft(
+            importId,
+            workspaceId,
+            jobId,
+            userId,
+            "applications.csv",
+            PrivateObjectKey.importSource(workspaceId, importId),
+            1,
+            List.of("email"),
+            Map.of(),
+            ImportStatus.CONFIRMED,
+            0,
+            now,
+            now);
+    NormalizedApplicationRow row =
+        new NormalizedApplicationRow(
+            2,
+            "Test",
+            "Candidate",
+            "candidate@example.test",
+            "https://drive.google.com/file/d/public-resume/view",
+            null,
+            "Pune",
+            null,
+            null,
+            null,
+            24,
+            30,
+            null,
+            LocalDate.parse("2026-08-08"),
+            "GOOGLE_FORM",
+            null,
+            null);
+    PrivateObjectKey uploadedKey =
+        PrivateObjectKey.quarantineResume(workspaceId, uploadedFileId, UUID.randomUUID());
+
+    given(repository.beginProcessing(workspaceId, importId, now)).willReturn(true);
+    given(repository.find(workspaceId, importId)).willReturn(Optional.of(draft));
+    given(repository.findPendingRows(workspaceId, importId))
+        .willReturn(List.of(new ImportProcessingRow(2, row)));
+    given(candidates.createOrMatch(any(), any()))
+        .willReturn(new CandidateImportAccess.Result(candidateId, applicationId, false, false));
+    given(resumes.transfer(any(), any(), any(), any()))
+        .willReturn(
+            new ResumeTransferService.TransferResult(
+                uploadedFileId, uploadedKey, 1024, "application/pdf"));
+    given(candidates.attachResume(any(), any(), any())).willReturn(persistedFileId);
+
+    new ImportApplicationWorker(repository, candidates, resumes, Clock.fixed(now, ZoneOffset.UTC))
+        .process(actor, importId);
+
+    verify(repository).markResumeQuarantined(workspaceId, importId, 2, persistedFileId, now);
+  }
+
+  @Test
   void retainsPublicDriveResumeLinkWhenPrivateTransferFails() {
     UUID userId = UUID.randomUUID();
     UUID workspaceId = UUID.randomUUID();

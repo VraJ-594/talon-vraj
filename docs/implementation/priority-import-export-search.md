@@ -675,6 +675,17 @@ fixtures remain useful at test boundaries without masking unavailable APIs in pr
   expected CTC below 40 LPA`, editable-chip execution, and provider-failure fallback checks. Do not
   claim manual readiness until all are observed.
 
+- Deployed replay-import diagnosis: the latest three rows created three candidate/application file
+  records and wrote three private S3 quarantine objects (333,279 aggregate bytes), but import-row
+  file links remained empty and each row was incorrectly marked `RESUME_TRANSFER_FAILED`. The
+  candidate-file upsert preserved the existing application file primary key while the worker tried
+  to link its newly generated ID. `CandidateImportAccess.attachResume` now returns the actual
+  `RETURNING id`, and the worker records that persisted identity. The regression failed against the
+  old void contract, then passed after the correction; the full backend gate passed 124/124.
+- Resume URL handling remains private by design: PostgreSQL stores only the private object key and
+  file status. Authorized clean-file preview generates a short-lived presigned URL on demand; an
+  expiring presigned URL is never persisted in the database.
+
 - Docker/Testcontainers is not required for the current manual path because the API uses the
   configured Supabase JDBC connection. The retained PostgreSQL Testcontainers gate remains useful
   when Docker Desktop is running from its E:-drive installation. Supabase is green at Flyway V6.

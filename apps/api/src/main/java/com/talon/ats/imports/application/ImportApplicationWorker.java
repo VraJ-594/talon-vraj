@@ -96,18 +96,23 @@ public final class ImportApplicationWorker {
       ResumeTransferService.TransferResult transferred =
           resumes.transfer(
               actor.workspaceId(), fileId, UUID.randomUUID(), URI.create(row.resumeDriveUrl()));
-      candidates.attachResume(
-          new CandidateImportAccess.Actor(actor.userId(), actor.workspaceId(), actor.role()),
-          applicationId,
-          new CandidateImportAccess.Resume(
-              transferred.fileId(),
-              "resume.pdf",
-              transferred.objectKey().value(),
-              "QUARANTINED",
-              transferred.contentType(),
-              transferred.sizeBytes()));
+      UUID persistedFileId =
+          candidates.attachResume(
+              new CandidateImportAccess.Actor(actor.userId(), actor.workspaceId(), actor.role()),
+              applicationId,
+              new CandidateImportAccess.Resume(
+                  transferred.fileId(),
+                  "resume.pdf",
+                  transferred.objectKey().value(),
+                  "QUARANTINED",
+                  transferred.contentType(),
+                  transferred.sizeBytes()));
       repository.markResumeQuarantined(
-          actor.workspaceId(), importId, processingRow.sourceRowNumber(), fileId, clock.instant());
+          actor.workspaceId(),
+          importId,
+          processingRow.sourceRowNumber(),
+          persistedFileId,
+          clock.instant());
     } catch (ExternalFileFetchException failure) {
       repository.markResumeFailed(
           actor.workspaceId(),
