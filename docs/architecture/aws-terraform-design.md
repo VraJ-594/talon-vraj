@@ -18,7 +18,7 @@ infra/terraform/
 ```
 
 Inputs include account/region/environment/domain, networking, image digests, task sizes/counts,
-Supabase secret reference/value injection procedure, bucket naming prefix, queue limits, xAI/scanner
+Supabase secret reference/value injection procedure, bucket naming prefix, queue limits, Groq/scanner
 configuration, and alarms. No account ID, ARN, region, bucket name, credential, or Terraform state
 is committed/hardcoded in application behavior.
 
@@ -44,11 +44,11 @@ only and never application behavior.
 - SQS + DLQ transports work references; PostgreSQL jobs remain authoritative.
 - Private quarantine, clean-resume, and export storage is separated by bucket or strongly scoped
   prefixes/roles. Lifecycle removes quarantine failures promptly and exports after seven days.
-- Secrets Manager supplies database/JWT/xAI/scanner secrets to task roles.
+- Secrets Manager supplies database/JWT/Groq/scanner secrets to task roles.
 - CloudWatch logs, metrics, dashboards, and alarms cover service health, queue age/DLQ, import
-  failures, Grok failures, and access anomalies.
+  failures, Groq failures, and access anomalies.
 
-NAT/egress cost is explicitly reviewed because workers need Google Drive/xAI/Supabase access.
+NAT/egress cost is explicitly reviewed because workers need Google Drive/Groq/Supabase access.
 Where supported and cost-effective, VPC endpoints reduce S3/SQS/ECR/logs egress dependencies.
 
 ## 4. PostgreSQL
@@ -95,3 +95,20 @@ DLQ references, log groups, and secret ARNs. Recovery covers redeploying immutab
 replaying idempotent DLQ work, restoring verified PostgreSQL backup/export according to tier, and
 reconciling object metadata. Multi-AZ tasks, autoscaling, WAF, and richer CI are enabled when load
 and risk justify them, without changing application contracts.
+
+## 8. Remote state and GitHub federation
+
+The bootstrap root creates a private, versioned, encrypted S3 state bucket. Bootstrap state uses
+`talon/bootstrap/terraform.tfstate`; the development root uses `talon/dev/terraform.tfstate`. Both
+use S3 native lockfiles (`use_lockfile = true`), so no DynamoDB lock table is introduced.
+
+GitHub Actions uses the account's GitHub OIDC provider and assumes a dedicated role. Its trust
+requires audience `sts.amazonaws.com` and subject exactly
+`repo:VraJ-594/talon-vraj:ref:refs/heads/main`. The role can access only the two development state
+objects/lockfiles and manage the deterministic candidate bucket plus its runtime IAM policy. The
+repository stores the role ARN, region, and state bucket as non-secret variables; it stores no AWS
+access key.
+
+The workflow applies only the development storage root after relevant changes reach `main`.
+Bootstrap remains an operator-controlled root, and compute/network/ECS permissions are not granted
+until the private S3 transfer gate passes.

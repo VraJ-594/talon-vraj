@@ -1,0 +1,3 @@
+aws_region         = "ap-south-1"
+environment        = "dev"
+allowed_web_origins = ["https://ats.example.com"]

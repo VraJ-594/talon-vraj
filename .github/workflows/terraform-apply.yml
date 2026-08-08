@@ -1,0 +1,65 @@
+name: Apply development Terraform
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/terraform-apply.yml'
+      - 'infra/terraform/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: talon-development-terraform-vraj
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Validate, plan, and apply
+    runs-on: ubuntu-latest
+    environment: development
+    defaults:
+      run:
+        shell: bash
+        working-directory: infra/terraform/environments/dev
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.15.8
+
+      - name: Configure short-lived AWS credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Check formatting
+        working-directory: .
+        run: terraform fmt -check -recursive infra/terraform
+
+      - name: Initialize remote state
+        run: >-
+          terraform init -input=false
+          -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          -backend-config="key=talon/dev/terraform.tfstate"
+          -backend-config="region=${{ vars.AWS_REGION }}"
+          -backend-config="encrypt=true"
+          -backend-config="use_lockfile=true"
+
+      - name: Validate configuration
+        run: terraform validate
+
+      - name: Create reviewed plan artifact
+        run: terraform plan -input=false -out=dev.tfplan -var="aws_region=${{ vars.AWS_REGION }}"
+
+      - name: Apply exact plan
+        run: terraform apply -input=false -auto-approve dev.tfplan

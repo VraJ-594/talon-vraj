@@ -27,6 +27,7 @@ test-results/
 
 # Terraform local state and plans
 .terraform/
+backend.hcl
 *.tfstate
 *.tfstate.*
 *.tfplan

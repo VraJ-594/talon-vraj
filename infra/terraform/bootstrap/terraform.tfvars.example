@@ -1,0 +1,9 @@
+aws_region = "ap-south-1"
+environment = "dev"
+
+github_owner      = "VraJ-594"
+github_repository = "talon-vraj"
+github_branch     = "main"
+
+# Set this only when the account already has GitHub's OIDC provider.
+# existing_github_oidc_provider_arn = "arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com"
