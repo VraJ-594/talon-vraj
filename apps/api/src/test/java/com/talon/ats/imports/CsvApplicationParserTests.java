@@ -67,6 +67,19 @@ class CsvApplicationParserTests {
   }
 
   @Test
+  void rejectsSourceHeadersThatDifferOnlyByCase() {
+    assertThatThrownBy(
+            () ->
+                parser.inspect(
+                    stream(
+                        "first_name,last_name,email,EMAIL,resume_drive_url\n"
+                            + "Nila,Raman,a@example.com,a@example.com,https://drive.google.com/file/d/demo/view\n")))
+        .isInstanceOf(CsvParseException.class)
+        .extracting(error -> ((CsvParseException) error).code())
+        .isEqualTo("DUPLICATE_SOURCE_COLUMN");
+  }
+
+  @Test
   void ignoresOrRetainsUnmappedColumnsAccordingToTheExplicitChoice() {
     String csv =
         "First response,Last response,Email address,Resume link,Team preference\r\n"

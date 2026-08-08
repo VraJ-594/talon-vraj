@@ -155,7 +155,7 @@ public final class CommonsCsvApplicationParser implements CsvApplicationParser {
       if (header == null || header.isBlank()) {
         throw problem("INVALID_CSV", "CSV header names must not be blank");
       }
-      if (!unique.add(header)) {
+      if (!unique.add(header.trim().toLowerCase(Locale.ROOT))) {
         throw problem("DUPLICATE_SOURCE_COLUMN", "CSV source columns must be unique");
       }
     }

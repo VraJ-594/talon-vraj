@@ -1,5 +1,6 @@
 package com.talon.ats.imports.domain;
 
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -37,7 +38,7 @@ public final class ColumnMapping {
     if (!missing.isEmpty()) {
       throw new IllegalArgumentException("required canonical mappings are missing: " + missing);
     }
-    return new ColumnMapping(Map.copyOf(normalized));
+    return new ColumnMapping(Collections.unmodifiableMap(new LinkedHashMap<>(normalized)));
   }
 
   public Map<String, CanonicalField> assignments() {
