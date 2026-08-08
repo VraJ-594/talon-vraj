@@ -104,3 +104,7 @@ autoscaling, WAF, and production high availability.
 - GitHub currently reports `codex/backend-api` as the default branch even though `main` exists. Push
   the UUID correction to both branches to exercise the `main` workflow, then change the repository
   default branch to `main` so workflow discovery and pull requests use the intended base.
+- The first `main` workflow reached OIDC but AWS rejected its token because the job declared the
+  `development` GitHub Environment, changing the token subject away from the role's exact main-ref
+  trust. Repository variables are already used, so the environment declaration was removed. The
+  next run will retain the strict `refs/heads/main` trust without storing AWS credentials.

@@ -26,7 +26,6 @@ jobs:
     name: Verify, build, and deploy
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: development
     defaults:
       run:
         shell: bash
