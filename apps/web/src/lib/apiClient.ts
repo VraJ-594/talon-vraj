@@ -29,7 +29,8 @@ export class ApiClient {
       headers.set('Authorization', `Bearer ${this.accessToken}`);
     }
 
-    return this.fetcher(`${this.baseUrl}${path}`, {
+    const fetcher = this.fetcher;
+    return fetcher(`${this.baseUrl}${path}`, {
       ...init,
       credentials: 'include',
       headers,
