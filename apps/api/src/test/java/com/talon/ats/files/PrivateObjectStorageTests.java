@@ -113,6 +113,21 @@ class PrivateObjectStorageTests {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  @Test
+  void deletesAnOpaqueImportObjectIdempotentlyWithoutTouchingSiblingObjects() {
+    LocalObjectStorage storage = new LocalObjectStorage(root);
+    PrivateObjectKey deleted = PrivateObjectKey.importSource(WORKSPACE_ID, FILE_ID);
+    PrivateObjectKey sibling = PrivateObjectKey.exportArtifact(WORKSPACE_ID, FILE_ID);
+    storage.put(deleted, bytes("first_name,email"), 1024);
+    storage.put(sibling, bytes("synthetic export"), 1024);
+
+    storage.delete(deleted);
+    storage.delete(deleted);
+
+    assertThat(storage.exists(deleted)).isFalse();
+    assertThat(storage.exists(sibling)).isTrue();
+  }
+
   private static ByteArrayInputStream bytes(String value) {
     return new ByteArrayInputStream(value.getBytes(StandardCharsets.US_ASCII));
   }

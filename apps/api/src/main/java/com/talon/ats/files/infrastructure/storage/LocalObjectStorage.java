@@ -74,6 +74,15 @@ public final class LocalObjectStorage implements ObjectStorage {
   }
 
   @Override
+  public void delete(PrivateObjectKey key) {
+    try {
+      Files.deleteIfExists(target(key));
+    } catch (IOException exception) {
+      throw new UncheckedIOException("private object deletion failed", exception);
+    }
+  }
+
+  @Override
   public void promote(PrivateObjectKey quarantine, PrivateObjectKey clean) {
     Objects.requireNonNull(quarantine, "quarantine key is required");
     Objects.requireNonNull(clean, "clean key is required");

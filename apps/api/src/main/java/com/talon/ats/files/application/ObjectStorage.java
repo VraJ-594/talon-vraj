@@ -10,5 +10,7 @@ public interface ObjectStorage {
 
   boolean exists(PrivateObjectKey key);
 
+  void delete(PrivateObjectKey key);
+
   void promote(PrivateObjectKey quarantine, PrivateObjectKey clean);
 }

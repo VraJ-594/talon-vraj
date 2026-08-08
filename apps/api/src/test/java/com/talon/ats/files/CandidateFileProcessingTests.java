@@ -130,6 +130,11 @@ class CandidateFileProcessingTests {
     }
 
     @Override
+    public void delete(PrivateObjectKey key) {
+      objects.remove(key);
+    }
+
+    @Override
     public void promote(PrivateObjectKey quarantine, PrivateObjectKey clean) {
       objects.put(clean, objects.remove(quarantine));
     }
