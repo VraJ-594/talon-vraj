@@ -63,6 +63,22 @@ const openJobGateway: JobGateway = {
 };
 
 describe('ImportWizard recovery and lifecycle states', () => {
+  it('renders on an HTTP origin where crypto.randomUUID is unavailable', async () => {
+    const browserCrypto = globalThis.crypto;
+    vi.stubGlobal('crypto', {
+      getRandomValues: browserCrypto.getRandomValues.bind(browserCrypto),
+    });
+
+    try {
+      expect(() =>
+        render(<ImportWizard importGateway={importGateway()} jobGateway={openJobGateway} />),
+      ).not.toThrow();
+      expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
+    } finally {
+      vi.stubGlobal('crypto', browserCrypto);
+    }
+  });
+
   it('shows safe restoration recovery without exposing rejected gateway detail', async () => {
     const user = userEvent.setup();
     const getImport = vi

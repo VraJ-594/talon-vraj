@@ -142,6 +142,20 @@ const STEP_TITLE: Readonly<Record<WizardStep, string>> = {
   RESULTS: 'Import results',
 };
 
+function createIdempotencyKey(): string {
+  if (typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0'));
+  return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex
+    .slice(6, 8)
+    .join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10).join('')}`;
+}
+
 export function ImportWizard({
   importGateway,
   jobGateway,
@@ -162,7 +176,7 @@ export function ImportWizard({
   const [pendingOperation, setPendingOperation] = useState<ImportOperation | null>(null);
   const [restoreFailed, setRestoreFailed] = useState(false);
   const [restoreAttempt, setRestoreAttempt] = useState(0);
-  const idempotencyKey = useRef(crypto.randomUUID());
+  const idempotencyKey = useRef(createIdempotencyKey());
 
   useEffect(() => {
     let active = true;

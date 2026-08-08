@@ -2,10 +2,10 @@
 
 ## Scope and current status
 
-Status: implementation and local verification are substantially complete. The private ECR
-repositories and runtime secret exist in AWS, and both application images build locally. The images
-have not yet been tagged with a source commit and pushed, and the `dev-runtime` Terraform root has
-not yet been applied. No public demo URL is claimed at this checkpoint.
+Status: the first runtime is deployed in AWS from commit `addbbd7`. One ECS task is running behind a
+healthy ALB target, and the SPA and readiness path return HTTP 200. A production-only import-page
+failure was then reproduced on the HTTP endpoint because `crypto.randomUUID()` requires a secure
+context; its compatibility correction is the current patch awaiting image deployment.
 
 This phase deploys the current priority ATS slice as one ECS Fargate task with two containers:
 Nginx/React web and Spring Boot API. It intentionally excludes a custom domain, TLS, NAT gateways,
@@ -82,18 +82,25 @@ autoscaling, WAF, and production high availability.
 - Docker Desktop 29.6.2 is healthy with overlayfs. Local images observed:
   `talon-api-vraj:local` (`964dfd1e3e7b`, 444 MB) and
   `talon-web-vraj:local` (`1ddc0dc6e615`, 79.8 MB).
+- Commit `addbbd71724fc5900cb30462fa04a1c726586695` was built and pushed to both private ECR
+  repositories. Runtime apply created 21 resources with no updates or deletes. ECS reported one
+  running task, the exact Terraform target group reported `healthy`, and both the readiness and SPA
+  paths returned HTTP 200.
+- HTTP import regression: the focused test failed with `crypto.randomUUID is not a function` when
+  `randomUUID` was unavailable, matching the ALB production error. The fallback now uses
+  `crypto.getRandomValues()` to create an RFC 4122 version-4 identifier; the focused suite passed
+  7/7 after the correction.
 
 ## Known blockers, prerequisites, and exact next step
 
-- The images must be committed, tagged with that full Git commit SHA, authenticated to account
-  `762079300828` ECR in `ap-south-1`, and pushed before runtime apply.
-- Runtime apply must use real immutable image tags and a reviewed single-client `/32` ALB ingress
-  CIDR. It must not use the placeholder documentation CIDR from validation.
+- The HTTP UUID correction must be committed, pushed as a new immutable web image, and deployed
+  before the import page is considered production-smoke green.
 - After apply, wait for ECS service stability and smoke the generated ALB URL, readiness endpoint,
   SPA fallback, login/refresh/logout, candidate list/search, and import workflow.
 - The real Drive-to-S3 row-level smoke remains a separate acceptance gate. Do not claim reliable S3
   import delivery until an imported public PDF is observed as a private S3 object.
 - GitHub repository variables still need to be configured before the first `main` workflow run:
   `AWS_ROLE_ARN`, `AWS_REGION`, `TF_STATE_BUCKET`, and JSON-array `DEMO_INGRESS_CIDRS`.
-- Exact next step: scan and commit the verified source without ignored files, then push both local
-  images under that commit SHA to their private ECR repositories.
+- GitHub currently reports `codex/backend-api` as the default branch even though `main` exists. Push
+  the UUID correction to both branches to exercise the `main` workflow, then change the repository
+  default branch to `main` so workflow discovery and pull requests use the intended base.
