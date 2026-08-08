@@ -3,7 +3,9 @@ package com.talon.ats.candidates.infrastructure;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.talon.ats.candidates.application.CandidateApplicationService;
 import com.talon.ats.candidates.application.CandidateApplicationStore;
+import com.talon.ats.candidates.contract.CandidateImportAccess;
 import com.talon.ats.candidates.infrastructure.persistence.JdbcCandidateApplicationStore;
+import com.talon.ats.candidates.infrastructure.persistence.JdbcCandidateImportAccess;
 import java.time.Clock;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -27,5 +29,14 @@ public class CandidateRuntimeConfiguration {
   @Bean
   CandidateApplicationService candidateApplicationService(CandidateApplicationStore store) {
     return new CandidateApplicationService(store, UUID::randomUUID, Clock.systemUTC());
+  }
+
+  @Bean
+  CandidateImportAccess candidateImportAccess(
+      CandidateApplicationService service,
+      JdbcTemplate jdbc,
+      PlatformTransactionManager transactionManager) {
+    return new JdbcCandidateImportAccess(
+        service, jdbc, new TransactionTemplate(transactionManager));
   }
 }

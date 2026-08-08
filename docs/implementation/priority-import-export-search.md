@@ -4,14 +4,17 @@
 
 Status: in progress.
 
-Current checkpoint (2026-08-08): the backend draft-to-preview slice is implemented through its
-authenticated HTTP boundary. Strict Talon template recognition, private CSV storage, Flyway V4
-draft/preview persistence, tenant-scoped JDBC access, multipart upload, validation, preview
-restoration, and safe problem responses are present. Flyway V4 was applied to the configured
-Supabase PostgreSQL 17.6 project; schema smoke and synthetic persistence checks passed with cleanup.
-The network-free Maven gate passes 93 tests and the Modulith boundary check. Frontend HTTP gateways,
-confirmation, candidate/application processing, Drive resume ingestion, and private S3 remain
-incomplete, so the workflow is not yet ready for end-user manual testing.
+Current checkpoint (2026-08-08): the authenticated workflow is implemented from strict CSV upload
+through durable confirmation and same-deployment asynchronous processing. Valid rows create or
+match a workspace candidate and one application for the selected job; replay returns the existing
+records. The required public Drive PDF then flows through the five-starts-per-second source adapter
+into a private quarantine object. Flyway V5/V6 add durable processing state, row results, and
+tenant-isolated candidate-file metadata. Both migrations are applied to the configured Supabase
+PostgreSQL 17.6 project. The network-free backend gate passes 93 tests; frontend lint, all 73 tests,
+and its production build pass. A live authenticated smoke reached `COMPLETED_WITH_ERRORS` for the
+synthetic template's intentionally invalid Drive ID while retaining the processed candidate and
+application. Malware scanning/clean promotion, the S3 adapter, authorized resume delivery, export,
+and search remain incomplete.
 
 The approved active slice is minimal application-owned authentication followed by candidate CSV
 import/private export and dual-mode candidate search. The application-owned login/session HTTP
@@ -50,6 +53,21 @@ the latest run.
   with stable problem responses and no private object keys in browser-visible payloads.
 - Added fail-closed runtime provider selection. The files module owns local-adapter construction
   through `ObjectStorageFactory`, keeping imports dependent only on its exposed contract.
+- Integrated the `codex/frontend-web` worktree into `codex/backend-api`. Normal runtime uses real
+  job/import HTTP adapters, downloads the server template, uploads multipart CSV, renders the
+  read-only detected mapping and safe validation preview, and restores previews by opaque ID.
+- Kept fixture-only confirmation/progress screens unavailable in HTTP mode until their backend
+  worker contract exists, preventing a recruiter from entering a known dead end.
+- Added idempotent import confirmation and durable PostgreSQL progress/row state. A bounded local
+  dispatcher invokes the same application worker that a later SQS adapter can invoke without
+  changing import behavior.
+- Added an exposed candidate import contract and JDBC adapter. Normalized rows create or match a
+  candidate by workspace/email and create at most one application per candidate/job.
+- Added rate-limited resume transfer orchestration. Successful anonymous Drive PDFs are stored under
+  opaque private quarantine keys and linked to tenant-isolated `candidate_file` metadata; source
+  URLs, object keys, and provider details never enter browser responses.
+- Enabled real frontend confirm/progress polling in normal HTTP mode now that the corresponding
+  backend endpoints exist.
 - Recorded the owner naming convention in `docs/architecture/aws-terraform-design.md`: explicitly
   nameable AWS resources end in `-vraj`, global uniqueness precedes that suffix, and supported
   resources receive `Owner=Vraj` plus `Project=TalonATS` tags.
@@ -347,22 +365,29 @@ from becoming database instructions.
 - Current network-free full verification after the import HTTP checkpoint:
   `mvn ... spotless:apply verify` — build succeeded; 93 tests passed, the executable JAR was
   produced, and Spotless reported all 142 Java files clean.
+- Current processing/resume-transfer full verification: `mvn ... verify` — build succeeded; all 93
+  tests passed, the executable JAR was produced, and Spotless reported all 152 Java files clean.
+- Frontend integration gate: `npm run lint:web`, `npm run test:web -- --run`, and
+  `npm run build:web` — lint passed, 73/73 tests passed, and Vite produced the production bundle.
+- Supabase V6 smoke: Flyway validated six migrations, advanced schema version 5 to 6, and
+  `SupabaseSchemaSmokeIT` passed against PostgreSQL 17.6.
+- Live local-HTTP/Supabase smoke: health and login succeeded; a one-row upload validated 1/0/0,
+  confirmation returned `CONFIRMED`, candidate/application processing reached 1/1, same-key replay
+  returned the same import, and the intentionally fake Drive ID produced safe retryable
+  `RESUME_FETCH_FAILED` before the parent reached `COMPLETED_WITH_ERRORS`.
 
 ## Blockers, prerequisites, and exact next step
 
-- Docker Testcontainers cannot currently run: only `E:\Docker\Data` is present, no Docker Desktop
-  launcher or `docker.exe` is discoverable, and both Docker named pipes are absent. The retained
-  `PrioritySchemaMigrationIT` V4/RLS test compiles but requires Docker Desktop to be started from its
-  actual installation. Real Supabase schema/persistence gates are green and Flyway is at V4.
+- Docker/Testcontainers is not required for the current manual path because the API uses the
+  configured Supabase JDBC connection. The retained PostgreSQL Testcontainers gate remains useful
+  when Docker Desktop is running from its E:-drive installation. Supabase is green at Flyway V6.
 - The temporary branch split was corrected with a safe fast-forward: `codex/backend-api` now
   contains persistence commit `7498989` and is the active checkout. The appmod branch was preserved
   at the same commit; no branch or work was reset/deleted.
 - AWS account, private S3/SQS resources, malware scanner runtime, a funded xAI key, and one synthetic
   anonymously downloadable Drive PDF for a live provider smoke remain external prerequisites for
   their later checkpoints.
-- Exact next step: connect the frontend's shared authenticated `ApiClient`, jobs gateway, template
-  download, CSV upload, read-only detected mapping, validation preview, and preview restoration to
-  the new HTTP endpoints. The preview UI must stop before its fixture-only confirmation/processing
-  path. Only after the next confirmation/worker checkpoint exists should rows create
-  candidate/application records and public Drive PDFs stream through rate limiting/quarantine into
-  the private S3 adapter.
+- Exact next step: implement the private S3 adapter and fail-closed scan/clean promotion, then expose
+  real candidate/application projections and authorized clean-resume delivery to the frontend.
+  A successful provider smoke requires one anonymously downloadable synthetic Google Drive PDF;
+  AWS delivery additionally requires the Terraform-created private bucket and task-role access.

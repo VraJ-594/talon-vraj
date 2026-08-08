@@ -9,6 +9,9 @@ import com.talon.ats.imports.application.CsvPreviewIssue;
 import com.talon.ats.imports.application.ImportDraft;
 import com.talon.ats.imports.application.ImportDraftRepository;
 import com.talon.ats.imports.application.ImportPreviewSnapshot;
+import com.talon.ats.imports.application.ImportProcessingRow;
+import com.talon.ats.imports.application.ImportProgressSnapshot;
+import com.talon.ats.imports.application.NormalizedApplicationRow;
 import com.talon.ats.imports.application.ParsedApplicationRow;
 import com.talon.ats.imports.domain.CanonicalField;
 import com.talon.ats.imports.domain.ColumnMapping;
@@ -221,6 +224,374 @@ public final class JdbcImportDraftRepository implements ImportDraftRepository {
     return result == null ? Optional.empty() : result;
   }
 
+  @Override
+  public ImportProgressSnapshot confirm(
+      UUID workspaceId, UUID importId, UUID confirmationKey, Instant changedAt) {
+    requireIds(workspaceId, importId);
+    Objects.requireNonNull(confirmationKey, "confirmationKey is required");
+    Objects.requireNonNull(changedAt, "changedAt is required");
+    ImportProgressSnapshot result =
+        transactions.execute(
+            transaction -> {
+              setTenantContext(workspaceId);
+              ConfirmationState current =
+                  jdbc
+                      .query(
+                          """
+                          SELECT status, confirmation_key
+                          FROM candidate_import
+                          WHERE workspace_id = ? AND id = ?
+                          FOR UPDATE
+                          """,
+                          (rows, number) ->
+                              new ConfirmationState(
+                                  ImportStatus.valueOf(rows.getString("status")),
+                                  rows.getObject("confirmation_key", UUID.class)),
+                          workspaceId,
+                          importId)
+                      .stream()
+                      .findFirst()
+                      .orElseThrow(() -> new NoSuchElementException("import draft was not found"));
+              if (current.status() == ImportStatus.PREVIEW_READY) {
+                jdbc.update(
+                    """
+                    UPDATE candidate_import
+                    SET status = 'CONFIRMED', confirmation_key = ?, confirmed_at = ?,
+                        version = version + 1, updated_at = ?
+                    WHERE workspace_id = ? AND id = ?
+                    """,
+                    confirmationKey,
+                    Timestamp.from(changedAt),
+                    Timestamp.from(changedAt),
+                    workspaceId,
+                    importId);
+              } else if (!confirmationKey.equals(current.confirmationKey())) {
+                throw new IllegalStateException("import was already confirmed with another key");
+              }
+              return progressInTenant(workspaceId, importId)
+                  .orElseThrow(() -> new NoSuchElementException("import draft was not found"));
+            });
+    return Objects.requireNonNull(result);
+  }
+
+  @Override
+  public boolean beginProcessing(UUID workspaceId, UUID importId, Instant changedAt) {
+    requireIds(workspaceId, importId);
+    Boolean claimed =
+        transactions.execute(
+            transaction -> {
+              setTenantContext(workspaceId);
+              return jdbc.update(
+                      """
+                      UPDATE candidate_import
+                      SET status = 'PROCESSING', version = version + 1, updated_at = ?
+                      WHERE workspace_id = ? AND id = ? AND status = 'CONFIRMED'
+                      """,
+                      Timestamp.from(changedAt),
+                      workspaceId,
+                      importId)
+                  == 1;
+            });
+    return Boolean.TRUE.equals(claimed);
+  }
+
+  @Override
+  public List<ImportProcessingRow> findPendingRows(UUID workspaceId, UUID importId) {
+    requireIds(workspaceId, importId);
+    List<ImportProcessingRow> rows =
+        transactions.execute(
+            transaction -> {
+              setTenantContext(workspaceId);
+              return jdbc.query(
+                  """
+                  SELECT source_row_number, normalized_payload::text
+                  FROM candidate_import_row
+                  WHERE workspace_id = ? AND import_id = ? AND status = 'VALID'
+                  ORDER BY source_row_number
+                  """,
+                  (result, number) ->
+                      new ImportProcessingRow(
+                          result.getInt("source_row_number"),
+                          readRow(result.getString("normalized_payload"))),
+                  workspaceId,
+                  importId);
+            });
+    return rows == null ? List.of() : List.copyOf(rows);
+  }
+
+  @Override
+  public void markApplicationCreated(
+      UUID workspaceId,
+      UUID importId,
+      int sourceRowNumber,
+      UUID candidateId,
+      UUID applicationId,
+      Instant changedAt) {
+    updateProcessingRow(
+        workspaceId,
+        importId,
+        sourceRowNumber,
+        "APPLICATION_CREATED",
+        candidateId,
+        applicationId,
+        null,
+        null,
+        changedAt,
+        true);
+  }
+
+  @Override
+  public void markRowFailed(
+      UUID workspaceId,
+      UUID importId,
+      int sourceRowNumber,
+      String code,
+      String message,
+      Instant changedAt) {
+    updateProcessingRow(
+        workspaceId,
+        importId,
+        sourceRowNumber,
+        "PERSISTENCE_FAILED",
+        null,
+        null,
+        bounded(code, 80),
+        bounded(message, 500),
+        changedAt,
+        false);
+  }
+
+  @Override
+  public void markResumeQuarantined(
+      UUID workspaceId, UUID importId, int sourceRowNumber, UUID resumeFileId, Instant changedAt) {
+    requireIds(workspaceId, importId);
+    transactions.executeWithoutResult(
+        transaction -> {
+          setTenantContext(workspaceId);
+          int updated =
+              jdbc.update(
+                  """
+                  UPDATE candidate_import_row
+                  SET status = 'RESUME_QUARANTINED', resume_file_id = ?, updated_at = ?
+                  WHERE workspace_id = ? AND import_id = ? AND source_row_number = ?
+                    AND status = 'APPLICATION_CREATED'
+                  """,
+                  resumeFileId,
+                  Timestamp.from(changedAt),
+                  workspaceId,
+                  importId,
+                  sourceRowNumber);
+          if (updated != 1) {
+            throw new IllegalStateException("resume transition did not affect one row");
+          }
+        });
+  }
+
+  @Override
+  public void markResumeFailed(
+      UUID workspaceId,
+      UUID importId,
+      int sourceRowNumber,
+      String code,
+      String message,
+      Instant changedAt) {
+    requireIds(workspaceId, importId);
+    transactions.executeWithoutResult(
+        transaction -> {
+          setTenantContext(workspaceId);
+          int updated =
+              jdbc.update(
+                  """
+                  UPDATE candidate_import_row
+                  SET status = 'RESUME_FETCH_FAILED', error_code = ?, error_message = ?,
+                      updated_at = ?
+                  WHERE workspace_id = ? AND import_id = ? AND source_row_number = ?
+                    AND status = 'APPLICATION_CREATED'
+                  """,
+                  bounded(code, 80),
+                  bounded(message, 500),
+                  Timestamp.from(changedAt),
+                  workspaceId,
+                  importId,
+                  sourceRowNumber);
+          if (updated != 1) {
+            throw new IllegalStateException("resume failure transition did not affect one row");
+          }
+          jdbc.update(
+              """
+              UPDATE candidate_import
+              SET error_count = error_count + 1, updated_at = ?, version = version + 1
+              WHERE workspace_id = ? AND id = ?
+              """,
+              Timestamp.from(changedAt),
+              workspaceId,
+              importId);
+        });
+  }
+
+  @Override
+  public void finishApplicationCreation(UUID workspaceId, UUID importId, Instant changedAt) {
+    requireIds(workspaceId, importId);
+    transactions.executeWithoutResult(
+        transaction -> {
+          setTenantContext(workspaceId);
+          jdbc.update(
+              """
+              UPDATE candidate_import
+              SET status = CASE
+                    WHEN EXISTS (
+                        SELECT 1 FROM candidate_import_row row
+                        WHERE row.workspace_id = candidate_import.workspace_id
+                          AND row.import_id = candidate_import.id
+                          AND row.status = 'RESUME_QUARANTINED'
+                    ) THEN 'PROCESSING'
+                    WHEN error_count + invalid_count + duplicate_count > 0
+                      THEN 'COMPLETED_WITH_ERRORS'
+                    ELSE 'COMPLETED'
+                  END,
+                  updated_at = ?, version = version + 1
+              WHERE workspace_id = ? AND id = ? AND status = 'PROCESSING'
+              """,
+              Timestamp.from(changedAt),
+              workspaceId,
+              importId);
+        });
+  }
+
+  @Override
+  public Optional<ImportProgressSnapshot> findProgress(UUID workspaceId, UUID importId) {
+    requireIds(workspaceId, importId);
+    Optional<ImportProgressSnapshot> result =
+        transactions.execute(
+            transaction -> {
+              setTenantContext(workspaceId);
+              return progressInTenant(workspaceId, importId);
+            });
+    return result == null ? Optional.empty() : result;
+  }
+
+  private void updateProcessingRow(
+      UUID workspaceId,
+      UUID importId,
+      int sourceRowNumber,
+      String rowStatus,
+      UUID candidateId,
+      UUID applicationId,
+      String errorCode,
+      String errorMessage,
+      Instant changedAt,
+      boolean processed) {
+    requireIds(workspaceId, importId);
+    transactions.executeWithoutResult(
+        transaction -> {
+          setTenantContext(workspaceId);
+          int updated =
+              jdbc.update(
+                  """
+                  UPDATE candidate_import_row
+                  SET status = ?, candidate_id = COALESCE(?, candidate_id),
+                      application_id = COALESCE(?, application_id), error_code = ?,
+                      error_message = ?, processed_at = ?, updated_at = ?
+                  WHERE workspace_id = ? AND import_id = ? AND source_row_number = ?
+                    AND status IN ('VALID','PROCESSING')
+                  """,
+                  rowStatus,
+                  candidateId,
+                  applicationId,
+                  errorCode,
+                  errorMessage,
+                  Timestamp.from(changedAt),
+                  Timestamp.from(changedAt),
+                  workspaceId,
+                  importId,
+                  sourceRowNumber);
+          if (updated != 1) {
+            throw new IllegalStateException("import row transition did not affect one row");
+          }
+          jdbc.update(
+              """
+              UPDATE candidate_import
+              SET processed_count = processed_count + ?, error_count = error_count + ?,
+                  updated_at = ?, version = version + 1
+              WHERE workspace_id = ? AND id = ?
+              """,
+              processed ? 1 : 0,
+              processed ? 0 : 1,
+              Timestamp.from(changedAt),
+              workspaceId,
+              importId);
+        });
+  }
+
+  private Optional<ImportProgressSnapshot> progressInTenant(UUID workspaceId, UUID importId) {
+    Optional<ProgressCounts> counts =
+        jdbc
+            .query(
+                """
+                SELECT status, row_count, processed_count, error_count,
+                       invalid_count, duplicate_count
+                FROM candidate_import
+                WHERE workspace_id = ? AND id = ?
+                """,
+                (rows, number) ->
+                    new ProgressCounts(
+                        ImportStatus.valueOf(rows.getString("status")),
+                        rows.getInt("row_count"),
+                        rows.getInt("processed_count"),
+                        rows.getInt("error_count"),
+                        rows.getInt("invalid_count"),
+                        rows.getInt("duplicate_count")),
+                workspaceId,
+                importId)
+            .stream()
+            .findFirst();
+    if (counts.isEmpty()) return Optional.empty();
+    List<ImportProgressSnapshot.Row> rows =
+        jdbc.query(
+            """
+            SELECT source_row_number, status, error_code, error_message
+            FROM candidate_import_row
+            WHERE workspace_id = ? AND import_id = ?
+            ORDER BY source_row_number
+            """,
+            (result, number) ->
+                new ImportProgressSnapshot.Row(
+                    result.getInt("source_row_number"),
+                    result.getString("status"),
+                    retryable(result.getString("status")),
+                    result.getString("error_code"),
+                    result.getString("error_message")),
+            workspaceId,
+            importId);
+    ProgressCounts value = counts.orElseThrow();
+    return Optional.of(
+        new ImportProgressSnapshot(
+            importId,
+            value.status(),
+            value.processedCount() + value.invalidCount() + value.duplicateCount(),
+            value.rowCount(),
+            value.errorCount() + value.invalidCount() + value.duplicateCount() > 0,
+            rows));
+  }
+
+  private NormalizedApplicationRow readRow(String value) throws SQLException {
+    try {
+      return objectMapper.readValue(value, NormalizedApplicationRow.class);
+    } catch (JsonProcessingException exception) {
+      throw new SQLException("import row JSON decoding failed", exception);
+    }
+  }
+
+  private static boolean retryable(String status) {
+    return "RESUME_FETCH_FAILED".equals(status) || "PERSISTENCE_FAILED".equals(status);
+  }
+
+  private static String bounded(String value, int maximum) {
+    if (value == null) return null;
+    String safe = value.replaceAll("[\\p{Cntrl}]", " ").trim();
+    return safe.substring(0, Math.min(safe.length(), maximum));
+  }
+
   private void insertValidRows(
       UUID workspaceId, UUID importId, List<ParsedApplicationRow> rows, Instant changedAt) {
     for (ParsedApplicationRow row : rows) {
@@ -337,4 +708,14 @@ public final class JdbcImportDraftRepository implements ImportDraftRepository {
 
   private record PreviewCounts(
       int validCount, int invalidCount, int duplicateCount, ImportStatus status) {}
+
+  private record ConfirmationState(ImportStatus status, UUID confirmationKey) {}
+
+  private record ProgressCounts(
+      ImportStatus status,
+      int rowCount,
+      int processedCount,
+      int errorCount,
+      int invalidCount,
+      int duplicateCount) {}
 }

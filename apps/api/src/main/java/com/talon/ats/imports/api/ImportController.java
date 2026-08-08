@@ -6,6 +6,7 @@ import com.talon.ats.imports.application.ImportDraft;
 import com.talon.ats.imports.application.ImportDraftService;
 import com.talon.ats.imports.application.ImportPreviewSnapshot;
 import com.talon.ats.imports.application.ImportProblem;
+import com.talon.ats.imports.application.ImportProgressSnapshot;
 import com.talon.ats.imports.domain.CanonicalField;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -82,6 +84,19 @@ public class ImportController {
   @GetMapping("/{importId}/preview")
   ImportPreviewResponse preview(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID importId) {
     return ImportPreviewResponse.from(service.preview(actor(jwt), importId));
+  }
+
+  @PostMapping("/{importId}/confirm")
+  ImportProgressResponse confirm(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID importId,
+      @RequestHeader("Idempotency-Key") UUID idempotencyKey) {
+    return ImportProgressResponse.from(service.confirm(actor(jwt), importId, idempotencyKey));
+  }
+
+  @GetMapping("/{importId}")
+  ImportProgressResponse progress(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID importId) {
+    return ImportProgressResponse.from(service.progress(actor(jwt), importId));
   }
 
   private static ImportDraftService.Actor actor(Jwt jwt) {
@@ -155,6 +170,34 @@ public class ImportController {
     static ImportPreviewIssueResponse from(CsvPreviewIssue issue) {
       return new ImportPreviewIssueResponse(
           issue.rowNumber(), issue.kind(), issue.code(), issue.message());
+    }
+  }
+
+  record ImportProgressResponse(
+      UUID importId,
+      String status,
+      int processedCount,
+      int totalCount,
+      boolean errorCsvAvailable,
+      List<ImportProgressRowResponse> rows) {
+
+    static ImportProgressResponse from(ImportProgressSnapshot progress) {
+      return new ImportProgressResponse(
+          progress.importId(),
+          progress.status().name(),
+          progress.processedCount(),
+          progress.totalCount(),
+          progress.errorCsvAvailable(),
+          progress.rows().stream().map(ImportProgressRowResponse::from).toList());
+    }
+  }
+
+  record ImportProgressRowResponse(
+      int rowNumber, String status, boolean retryable, String message) {
+
+    static ImportProgressRowResponse from(ImportProgressSnapshot.Row row) {
+      return new ImportProgressRowResponse(
+          row.rowNumber(), row.status(), row.retryable(), row.message());
     }
   }
 }

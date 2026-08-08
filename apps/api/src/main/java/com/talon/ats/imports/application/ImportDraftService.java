@@ -28,6 +28,7 @@ public final class ImportDraftService {
   private final ImportTargetAccess importTargets;
   private final Supplier<UUID> idGenerator;
   private final Clock clock;
+  private final ImportWorkDispatcher dispatcher;
 
   public ImportDraftService(
       CsvApplicationParser parser,
@@ -37,6 +38,26 @@ public final class ImportDraftService {
       ImportTargetAccess importTargets,
       Supplier<UUID> idGenerator,
       Clock clock) {
+    this(
+        parser,
+        template,
+        repository,
+        storage,
+        importTargets,
+        idGenerator,
+        clock,
+        (actor, id) -> {});
+  }
+
+  public ImportDraftService(
+      CsvApplicationParser parser,
+      StrictTalonImportTemplate template,
+      ImportDraftRepository repository,
+      ObjectStorage storage,
+      ImportTargetAccess importTargets,
+      Supplier<UUID> idGenerator,
+      Clock clock,
+      ImportWorkDispatcher dispatcher) {
     this.parser = Objects.requireNonNull(parser);
     this.template = Objects.requireNonNull(template);
     this.repository = Objects.requireNonNull(repository);
@@ -44,6 +65,7 @@ public final class ImportDraftService {
     this.importTargets = Objects.requireNonNull(importTargets);
     this.idGenerator = Objects.requireNonNull(idGenerator);
     this.clock = Objects.requireNonNull(clock);
+    this.dispatcher = Objects.requireNonNull(dispatcher);
   }
 
   public ImportDraft upload(
@@ -142,6 +164,31 @@ public final class ImportDraftService {
     Objects.requireNonNull(importId, "importId is required");
     return repository
         .findPreview(actor.workspaceId(), importId)
+        .orElseThrow(ImportDraftService::notFound);
+  }
+
+  public ImportProgressSnapshot confirm(Actor actor, UUID importId, UUID confirmationKey) {
+    requireRecruitingAccess(actor);
+    Objects.requireNonNull(importId, "importId is required");
+    Objects.requireNonNull(confirmationKey, "confirmationKey is required");
+    try {
+      ImportProgressSnapshot progress =
+          repository.confirm(actor.workspaceId(), importId, confirmationKey, clock.instant());
+      if (progress.status() == ImportStatus.CONFIRMED) dispatcher.dispatch(actor, importId);
+      return progress;
+    } catch (NoSuchElementException exception) {
+      throw notFound();
+    } catch (IllegalStateException exception) {
+      throw new ImportProblem(
+          "IMPORT_ALREADY_CONFIRMED", "The import was already confirmed", exception);
+    }
+  }
+
+  public ImportProgressSnapshot progress(Actor actor, UUID importId) {
+    requireRecruitingAccess(actor);
+    Objects.requireNonNull(importId, "importId is required");
+    return repository
+        .findProgress(actor.workspaceId(), importId)
         .orElseThrow(ImportDraftService::notFound);
   }
 

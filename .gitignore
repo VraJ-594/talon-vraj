@@ -19,6 +19,7 @@ Thumbs.db
 
 # Generated and temporary artifacts
 tmp/
+.runtime/
 playwright-report/
 test-results/
 *.log

@@ -3,8 +3,11 @@ package com.talon.ats.imports;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.talon.ats.candidates.contract.CandidateImportAccess;
+import com.talon.ats.files.application.ExternalFileMetadata;
 import com.talon.ats.files.application.ObjectStorage;
 import com.talon.ats.files.application.ObjectStorageFactory;
+import com.talon.ats.files.application.ResumeTransferService;
 import com.talon.ats.files.infrastructure.storage.LocalObjectStorage;
 import com.talon.ats.imports.application.ImportDraftRepository;
 import com.talon.ats.imports.application.ImportDraftService;
@@ -32,6 +35,19 @@ class ImportRuntimeConfigurationTests {
               PlatformTransactionManager.class, () -> new DataSourceTransactionManager(DATA_SOURCE))
           .withBean(ObjectMapper.class, () -> new ObjectMapper().findAndRegisterModules())
           .withBean(ObjectStorageFactory.class, () -> LocalObjectStorage::new)
+          .withBean(
+              ResumeTransferService.class,
+              () ->
+                  new ResumeTransferService(
+                      (source, sink) -> new ExternalFileMetadata(1, "application/pdf"),
+                      new LocalObjectStorage(
+                          Path.of("target", "runtime-resume-files").toAbsolutePath())))
+          .withBean(
+              CandidateImportAccess.class,
+              () ->
+                  (actor, application) ->
+                      new CandidateImportAccess.Result(
+                          java.util.UUID.randomUUID(), java.util.UUID.randomUUID(), true, true))
           .withBean(ImportTargetAccess.class, () -> (workspaceId, jobId) -> true);
 
   @Test

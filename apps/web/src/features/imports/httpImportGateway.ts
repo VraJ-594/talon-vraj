@@ -3,6 +3,7 @@ import type {
   ColumnMapping,
   ImportDraft,
   ImportGateway,
+  ImportProgress,
   ImportPreview,
   ImportProblem,
   ImportProblemCode,
@@ -72,12 +73,27 @@ function asPreview(value: unknown): ImportPreview {
   return preview;
 }
 
+function asProgress(value: unknown): ImportProgress {
+  const progress = value as ImportProgress;
+  if (
+    typeof progress?.importId !== 'string' ||
+    typeof progress.status !== 'string' ||
+    typeof progress.processedCount !== 'number' ||
+    typeof progress.totalCount !== 'number' ||
+    typeof progress.errorCsvAvailable !== 'boolean' ||
+    !Array.isArray(progress.rows)
+  ) {
+    throw problem('API_UNAVAILABLE');
+  }
+  return progress;
+}
+
 function unavailable(): never {
   throw problem('API_UNAVAILABLE');
 }
 
 export class HttpImportGateway implements ImportGateway {
-  readonly processingAvailable = false;
+  readonly processingAvailable = true;
 
   constructor(private readonly apiClient: ApiClient) {}
 
@@ -129,12 +145,26 @@ export class HttpImportGateway implements ImportGateway {
     return asPreview(await response.json());
   }
 
-  async confirm(): Promise<never> {
-    return unavailable();
+  async confirm(input: { readonly importId: string; readonly idempotencyKey: string }) {
+    const response = await ensureOk(
+      await this.apiClient.request(
+        `/api/v1/imports/${encodeURIComponent(input.importId)}/confirm`,
+        { method: 'POST', headers: { 'Idempotency-Key': input.idempotencyKey } },
+        true,
+      ),
+    );
+    return asProgress(await response.json());
   }
 
-  async getImport(): Promise<never> {
-    return unavailable();
+  async getImport(importId: string) {
+    const response = await ensureOk(
+      await this.apiClient.request(
+        `/api/v1/imports/${encodeURIComponent(importId)}`,
+        { method: 'GET' },
+        true,
+      ),
+    );
+    return asProgress(await response.json());
   }
 
   async retryRow(): Promise<never> {

@@ -1,17 +1,26 @@
 # Priority Frontend Workstream Handoff
 
-- Status: Basic HTTP authentication integration and live browser login/session smoke complete; automated gates green
-- Branch/worktree: `codex/frontend-web` / `.worktrees/frontend-web`
+- Status: Authentication plus CSV preview/confirmation/progress HTTP integration implemented; automated gates green
+- Branch/worktree: integrated into `codex/backend-api`; source checkpoint retained on `codex/frontend-web`
 - Scope: Priority frontend workflows defined by `docs/prompts/frontend-parallel-session.md`
 - Updated: 2026-08-08
 
 ## Current checkpoint
 
-Checkpoints 1 through 3 are complete and received user visual sign-off. The current narrow checkpoint replaces fixture-only runtime authentication with the real backend login/session contract while preserving the signed-out and protected-shell presentation. Runtime auth now defaults to HTTP; fixture auth is available only through an explicit development opt-in. Candidate, job, and import runtime gateways remain fixtures pending their own API checkpoints. Export and all search behavior remain unimplemented.
+Checkpoints 1 through 3 are complete and received user visual sign-off. Normal runtime now composes
+one in-memory `ApiClient` across authentication, jobs, and imports. Authenticated recruiters can load
+real importable jobs, download the backend template, upload a strict Talon CSV, review the detected
+read-only mapping, validate rows, and restore the durable preview by opaque import ID. Fixture mode
+remains an explicit development opt-in. The backend now processes confirmed rows, while candidate
+review still uses its fixture gateway and export/search remain unimplemented.
 
 The HTTP gateway red test first failed because the gateway and central API client did not exist. The implemented gateway validates the backend's flat login/session responses, retains the bearer token only in the API client instance, includes credentials for the backend-set HttpOnly refresh cookie, maps stable RFC 9457 codes, and treats malformed success payloads as unavailable. A second red/green cycle proves fixture auth cannot activate in production. A live Chrome form-submit smoke then exposed a browser-only `Illegal invocation`: `ApiClient` called the injected native `fetch` as an object method, rebinding its receiver and preventing any request from leaving the browser. A focused regression test failed with the same error before the client detached the fetcher for invocation. The clean-browser rerun observed login HTTP 200 and navigation to `/candidates`. Automated formatting, lint, 73 tests, and the production build are green.
 
 The sign-in page's isolated console 404 was traced to the browser's implicit `/favicon.ico` request: the document did not declare a favicon. The document now references an SVG derived from the existing Talon brand mark, and both the live development response and production artifact contain the icon.
+
+HTTP mode now sends an idempotent confirmation key and polls durable import progress. Retry and error
+CSV actions remain unavailable because those backend endpoints do not yet exist. Formatting, lint,
+all 73 tests, and the production build pass.
 
 ## What changed
 
@@ -34,6 +43,14 @@ The sign-in page's isolated console 404 was traced to the browser's implicit `/f
 - Added focused auth, fixture gateway, shell navigation, and error-boundary tests.
 - Added exact `wouter@3.10.0` for small client-side routing. React Router 7.18.2 and 7.11.0 were evaluated first but rejected because the production audit reported high-severity advisories for each tested range; the final production dependency graph reports zero vulnerabilities.
 - Added typed `JobGateway` and `ImportGateway` boundaries with synthetic fixture adapters outside presentation components.
+- Added authenticated `HttpJobGateway` and `HttpImportGateway` adapters sharing the same bearer-token
+  owner as `HttpAuthGateway`; normal runtime no longer silently supplies fixture jobs/imports.
+- Replaced the client-generated header-only template with the authorized backend CSV attachment and
+  its canonical `talon-candidate-import.csv` filename.
+- Wired multipart upload, recognized mapping, validation, safe row issue codes, and URL-based preview
+  restoration to the implemented backend endpoints.
+- Enabled the already-designed confirmation/progress/result UI against the real durable backend
+  contract; confirmation carries an opaque idempotency key and progress restoration uses import ID.
 - Added the seven-step import UI: job selection, canonical template/upload, recognized-column review, validation preview, one-time confirmation, durable progress, and results.
 - Enforced the 10 MB/2,000-row fixture limits, UTF-8 BOM handling, quoted CSV headers, required canonical columns, and single-use canonical mappings.
 - Added plain-language normalization guidance for LPA/ANNUAL compensation, currencies, experience, notice periods, and dates.
@@ -237,9 +254,11 @@ The candidate composition extends the existing Talon visual language: an operati
 - Checkpoint 3 visual review: user-approved locally on 2026-08-08.
 - Deferred pages: `/search` is intentionally a non-functional placeholder because all search behavior is out of scope for this checkpoint. Calendar, offers, reports, sign-up, OAuth, and 2FA have no implemented frontend routes. Candidates and imports have UI implementations but still use fixture gateways until their backend HTTP checkpoints.
 
-## Backend contract requests
+## Backend contracts
 
-The authentication entries below are confirmed against the current backend tree and implemented by the frontend adapter. The remaining feature entries are frontend contract requests for later gateways.
+Authentication, jobs, upload, template, validation, and preview entries below are confirmed against
+the current backend tree and implemented by frontend adapters. Confirmation and later entries remain
+requests for subsequent checkpoints.
 
 ### `POST /api/v1/auth/login`
 
@@ -311,4 +330,7 @@ The authentication entries below are confirmed against the current backend tree 
 - Browser login, bearer-session E2E, and manual browser-storage inspection are complete. Manual logout remains the final useful user check; refresh rotation is still deferred by design.
 - Refresh rotation and server logout remain known deferred behavior; browser reload requires a new sign-in.
 - The earlier backend test-compilation claim about missing private-storage types is no longer current: those types and tests now exist, and the backend handoff records a green full Maven verification gate. A fresh API process is still required whenever backend runtime code changes.
-- Exact next step: compose one `ApiClient` across auth, jobs, and imports, then connect the approved strict-template upload/validation preview HTTP slice. Search remains untouched.
+- Exact next step: replace `createFixtureCandidateGateway()` in normal runtime with a real candidate
+  HTTP adapter after the backend exposes application roster/detail and authorized clean-resume
+  delivery. Keep fixture candidate data only under explicit fixture mode. Search remains untouched
+  until private resume completion and candidate review are usable end to end.

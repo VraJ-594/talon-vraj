@@ -35,6 +35,7 @@ public final class CanonicalRowValidator {
     Integer experienceMonths = experience(safeValues, errors);
     Integer noticeDays =
         nonNegativeInteger(safeValues, CanonicalField.NOTICE_PERIOD_DAYS, "INVALID_NOTICE", errors);
+    LocalDate availabilityDate = date(safeValues, CanonicalField.AVAILABILITY_DATE, errors);
     LocalDate applicationDate = date(safeValues, CanonicalField.APPLICATION_DATE, errors);
     NormalizedMoney current = money(safeValues, CanonicalField.CURRENT_CTC, errors);
     NormalizedMoney expected = money(safeValues, CanonicalField.EXPECTED_CTC, errors);
@@ -50,9 +51,16 @@ public final class CanonicalRowValidator {
             lastName,
             email,
             resumeUrl,
+            optional(safeValues, CanonicalField.PHONE),
+            optional(safeValues, CanonicalField.LOCATION),
+            optional(safeValues, CanonicalField.CURRENT_COMPANY),
+            optional(safeValues, CanonicalField.CURRENT_TITLE),
+            optional(safeValues, CanonicalField.SKILLS),
             experienceMonths,
             noticeDays,
+            availabilityDate,
             applicationDate,
+            defaulted(safeValues, CanonicalField.SOURCE, "CSV_IMPORT"),
             current,
             expected),
         List.of());
@@ -163,6 +171,17 @@ public final class CanonicalRowValidator {
   private static String value(Map<CanonicalField, String> values, CanonicalField field) {
     String value = values.get(field);
     return value == null ? "" : value.trim();
+  }
+
+  private static String optional(Map<CanonicalField, String> values, CanonicalField field) {
+    String value = value(values, field);
+    return value.isBlank() ? null : value;
+  }
+
+  private static String defaulted(
+      Map<CanonicalField, String> values, CanonicalField field, String fallback) {
+    String value = value(values, field);
+    return value.isBlank() ? fallback : value;
   }
 
   private static RowValidationError error(CanonicalField field, String code, String message) {
