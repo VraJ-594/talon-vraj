@@ -220,6 +220,89 @@ class PrioritySchemaMigrationIT {
     }
   }
 
+  @Test
+  void durableImportPreviewRowsAreTenantOwnedAndStructurallyConstrained() throws Exception {
+    UUID workspaceId = UUID.randomUUID();
+    UUID otherWorkspaceId = UUID.randomUUID();
+    UUID userId = UUID.randomUUID();
+    UUID membershipId = UUID.randomUUID();
+    UUID jobId = UUID.randomUUID();
+    UUID importId = UUID.randomUUID();
+
+    try (Connection connection = connection()) {
+      setWorkspace(connection, workspaceId);
+      execute(
+          connection,
+          "INSERT INTO workspace(id,name,slug,default_timezone,status) VALUES (?,?,?,?,?)",
+          workspaceId,
+          "Import Workspace",
+          "import-workspace-" + workspaceId,
+          "UTC",
+          "ACTIVE");
+      execute(
+          connection,
+          "INSERT INTO app_user(id,email,normalized_email,display_name,password_hash,status,default_workspace_id) VALUES (?,?,?,?,?,?,?)",
+          userId,
+          userId + "@example.com",
+          userId + "@example.com",
+          "Import Recruiter",
+          "$2a$12$WjJ0PmyFD6h7xjNQxJV13u98Ot4GY9NaAcNn0me04X6NxoJ/Oc9cW",
+          "ACTIVE",
+          workspaceId);
+      execute(
+          connection,
+          "INSERT INTO workspace_membership(id,workspace_id,user_id,role,status) VALUES (?,?,?,?,?)",
+          membershipId,
+          workspaceId,
+          userId,
+          "RECRUITER",
+          "ACTIVE");
+      execute(
+          connection,
+          "INSERT INTO job(id,workspace_id,title,status) VALUES (?,?,?,?)",
+          jobId,
+          workspaceId,
+          "Import Engineer",
+          "ACTIVE");
+      execute(
+          connection,
+          """
+          INSERT INTO candidate_import(
+              id, workspace_id, job_id, created_by, source_object_key, file_name,
+              row_count, source_columns, suggested_mapping, status)
+          VALUES (?,?,?,?,?,?,?,CAST(? AS jsonb),CAST(? AS jsonb),?)
+          """,
+          importId,
+          workspaceId,
+          jobId,
+          userId,
+          "imports/" + workspaceId + "/" + importId + "/source.csv",
+          "applications.csv",
+          1,
+          "[\"first_name\",\"last_name\",\"email\",\"resume_drive_url\"]",
+          "{\"first_name\":\"FIRST_NAME\",\"last_name\":\"LAST_NAME\",\"email\":\"EMAIL\",\"resume_drive_url\":\"RESUME_DRIVE_URL\"}",
+          "UPLOADED");
+      execute(
+          connection,
+          """
+          INSERT INTO candidate_import_row(
+              workspace_id, import_id, source_row_number, status, normalized_payload, issues)
+          VALUES (?,?,?,'VALID',CAST(? AS jsonb),'[]'::jsonb)
+          """,
+          workspaceId,
+          importId,
+          2,
+          "{\"email\":\"candidate@example.com\"}");
+
+      assertThat(count(connection, "candidate_import")).isEqualTo(1);
+      assertThat(count(connection, "candidate_import_row")).isEqualTo(1);
+      setWorkspace(connection, otherWorkspaceId);
+      assertThat(count(connection, "candidate_import")).isZero();
+      assertThat(count(connection, "candidate_import_row")).isZero();
+      connection.rollback();
+    }
+  }
+
   private static void seedJobAndCandidate(
       Connection connection, UUID workspaceId, UUID jobId, UUID candidateId) throws SQLException {
     setWorkspace(connection, workspaceId);
