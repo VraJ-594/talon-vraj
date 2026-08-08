@@ -1,172 +1,143 @@
+import { LogOut, Search, Upload, UsersRound, type LucideIcon } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation } from 'wouter';
+
 import {
-  BarChart3,
-  Bell,
-  BriefcaseBusiness,
-  CalendarDays,
-  ChevronDown,
-  FileText,
-  Inbox,
-  KanbanSquare,
-  LogOut,
-  Plus,
-  Search,
-  UserRound,
-  UsersRound,
-} from 'lucide-react';
-import { useEffect, useRef } from 'react';
+  isAuthProblem,
+  type AuthenticatedSession,
+  type AuthGateway,
+} from '../features/auth/authGateway';
+import { SignInPage } from '../features/auth/SignInPage';
+import { CandidateWorkspace } from '../features/candidates/CandidateWorkspace';
+import type { CandidateGateway } from '../features/candidates/candidateGateway';
+import { ImportWizard } from '../features/imports/ImportWizard';
+import { isOpaqueImportId, type ImportGateway } from '../features/imports/importGateway';
+import type { JobGateway } from '../features/jobs/jobGateway';
 
-type NavigationItem = {
+type PriorityRoute = {
+  readonly path: '/candidates' | '/imports' | '/search';
   readonly label: string;
-  readonly href: string;
-  readonly count?: number;
-  readonly icon: typeof BriefcaseBusiness;
-  readonly active?: boolean;
+  readonly pageTitle: string;
+  readonly description: string;
+  readonly icon: LucideIcon;
 };
 
-type Job = {
-  readonly id: string;
-  readonly title: string;
-  readonly location: string;
-  readonly owner: string;
-  readonly ownerInitials: string;
-  readonly ownerTone: 'amber' | 'blue' | 'violet';
-  readonly inProcess: number;
-  readonly activeCandidates: number;
-  readonly status: 'Active' | 'On hold' | 'Closing';
-};
-
-type JobGroup = {
-  readonly department: string;
-  readonly jobs: readonly Job[];
-};
-
-const navigationGroups: ReadonlyArray<{
-  readonly label: string;
-  readonly items: readonly NavigationItem[];
-}> = [
+const priorityRoutes: readonly PriorityRoute[] = [
   {
-    label: 'Recruit',
-    items: [
-      { label: 'Jobs', href: '#jobs', count: 6, icon: BriefcaseBusiness, active: true },
-      { label: 'Pipeline', href: '#pipeline', count: 9, icon: KanbanSquare },
-      { label: 'Review inbox', href: '#review', count: 4, icon: Inbox },
-      { label: 'Candidates', href: '#candidates', icon: UsersRound },
-    ],
+    path: '/candidates',
+    label: 'Candidates',
+    pageTitle: 'Candidates',
+    description: 'Candidate and application records will appear here after import.',
+    icon: UsersRound,
   },
   {
-    label: 'Coordinate',
-    items: [
-      { label: 'Scheduling', href: '#scheduling', count: 4, icon: CalendarDays },
-      { label: 'Offers', href: '#offers', count: 1, icon: FileText },
-    ],
+    path: '/imports',
+    label: 'Import applications',
+    pageTitle: 'Import applications',
+    description: 'Select a job and bring in application responses from CSV.',
+    icon: Upload,
   },
   {
-    label: 'Insights',
-    items: [{ label: 'Reports', href: '#reports', icon: BarChart3 }],
+    path: '/search',
+    label: 'Search',
+    pageTitle: 'Search',
+    description: 'Find candidates with keywords or structured filters.',
+    icon: Search,
   },
 ];
 
-const jobGroups: readonly JobGroup[] = [
-  {
-    department: 'Engineering',
-    jobs: [
-      {
-        id: 'ENG-204',
-        title: 'Senior Product Engineer',
-        location: 'Remote (US)',
-        owner: 'Maya Reyes',
-        ownerInitials: 'MR',
-        ownerTone: 'amber',
-        inProcess: 18,
-        activeCandidates: 38,
-        status: 'Active',
-      },
-      {
-        id: 'ENG-209',
-        title: 'Staff Design Engineer',
-        location: 'SF / Hybrid',
-        owner: 'Tom Iwu',
-        ownerInitials: 'TI',
-        ownerTone: 'blue',
-        inProcess: 8,
-        activeCandidates: 21,
-        status: 'Active',
-      },
-      {
-        id: 'ENG-198',
-        title: 'Engineering Manager, Infra',
-        location: 'New York',
-        owner: 'Maya Reyes',
-        ownerInitials: 'MR',
-        ownerTone: 'amber',
-        inProcess: 3,
-        activeCandidates: 12,
-        status: 'On hold',
-      },
-    ],
+function isPriorityRoutePath(path: string): path is PriorityRoute['path'] {
+  return priorityRoutes.some((route) => route.path === path);
+}
+
+function requestedLocation(path: string): PriorityRoute['path'] | `/imports?importId=${string}` {
+  if (!isPriorityRoutePath(path)) {
+    return '/candidates';
+  }
+  if (path === '/imports') {
+    const importId = new URLSearchParams(window.location.search).get('importId');
+    if (isOpaqueImportId(importId)) {
+      return `/imports?importId=${encodeURIComponent(importId)}`;
+    }
+  }
+  return path;
+}
+
+type AppProps = {
+  readonly authGateway?: AuthGateway;
+  readonly candidateGateway?: CandidateGateway;
+  readonly importGateway?: ImportGateway;
+  readonly jobGateway?: JobGateway;
+};
+
+const unconfiguredAuthGateway: AuthGateway = {
+  async restoreSession() {
+    return null;
   },
-  {
-    department: 'Design',
-    jobs: [
-      {
-        id: 'DES-114',
-        title: 'Product Designer, Growth',
-        location: 'Remote (EU)',
-        owner: 'Tom Iwu',
-        ownerInitials: 'TI',
-        ownerTone: 'blue',
-        inProcess: 20,
-        activeCandidates: 54,
-        status: 'Active',
-      },
-    ],
+  async login() {
+    throw new Error('Authentication gateway is not configured');
   },
-  {
-    department: 'People',
-    jobs: [
-      {
-        id: 'PPL-031',
-        title: 'Recruiting Coordinator',
-        location: 'Remote (US)',
-        owner: 'Maya Reyes',
-        ownerInitials: 'MR',
-        ownerTone: 'amber',
-        inProcess: 19,
-        activeCandidates: 67,
-        status: 'Active',
-      },
-    ],
+  async logout() {
+    return undefined;
   },
-  {
-    department: 'Sales',
-    jobs: [
-      {
-        id: 'SAL-076',
-        title: 'Head of Sales, EMEA',
-        location: 'London',
-        owner: 'Sam Altmann',
-        ownerInitials: 'SA',
-        ownerTone: 'violet',
-        inProcess: 6,
-        activeCandidates: 9,
-        status: 'Closing',
-      },
-    ],
+};
+
+const unconfiguredJobGateway: JobGateway = {
+  async listImportTargets() {
+    throw new Error('Job gateway is not configured');
   },
-];
+};
+
+const unconfiguredImportGateway: ImportGateway = {
+  processingAvailable: false,
+  async downloadTemplate() {
+    throw new Error('Import gateway is not configured');
+  },
+  async uploadCsv() {
+    throw new Error('Import gateway is not configured');
+  },
+  async validate() {
+    throw new Error('Import gateway is not configured');
+  },
+  async getPreview() {
+    throw new Error('Import gateway is not configured');
+  },
+  async confirm() {
+    throw new Error('Import gateway is not configured');
+  },
+  async getImport() {
+    throw new Error('Import gateway is not configured');
+  },
+  async retryRow() {
+    throw new Error('Import gateway is not configured');
+  },
+  async downloadErrors() {
+    throw new Error('Import gateway is not configured');
+  },
+};
 
 function Brand() {
   return (
-    <a className="brand" href="#jobs" aria-label="Talon home">
+    <Link className="brand" href="/candidates" aria-label="Talon home">
       <span className="brand-mark" aria-hidden="true">
         <span />
       </span>
       <span>Talon</span>
-    </a>
+    </Link>
   );
 }
 
-function Sidebar() {
+function Sidebar({
+  currentPath,
+  loggingOut,
+  onLogout,
+  session,
+}: {
+  currentPath: string;
+  loggingOut: boolean;
+  onLogout: () => Promise<void>;
+  session: AuthenticatedSession;
+}) {
   return (
     <aside className="sidebar">
       <div className="sidebar-topline">
@@ -175,45 +146,44 @@ function Sidebar() {
       </div>
 
       <nav aria-label="Primary" className="primary-nav">
-        {navigationGroups.map((group) => (
-          <section className="nav-group" key={group.label}>
-            <h2>{group.label}</h2>
-            <ul>
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <li key={item.label}>
-                    <a
-                      className={item.active ? 'nav-link active' : 'nav-link'}
-                      href={item.href}
-                      aria-current={item.active ? 'page' : undefined}
-                    >
-                      <Icon aria-hidden="true" size={18} strokeWidth={1.8} />
-                      <span>{item.label}</span>
-                      {item.count ? <span className="nav-count">{item.count}</span> : null}
-                    </a>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))}
-      </nav>
+        <section className="nav-group">
+          <h2>Workspace</h2>
+          <ul>
+            {priorityRoutes.map((route) => {
+              const Icon = route.icon;
+              const active = route.path === currentPath;
 
-      <button className="sidebar-new-job" type="button">
-        <Plus aria-hidden="true" size={16} />
-        New job
-      </button>
+              return (
+                <li key={route.path}>
+                  <Link
+                    className={active ? 'nav-link active' : 'nav-link'}
+                    href={route.path}
+                    aria-current={active ? 'page' : undefined}
+                  >
+                    <Icon aria-hidden="true" size={18} strokeWidth={1.8} />
+                    <span>{route.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      </nav>
 
       <div className="profile-card">
         <span className="avatar avatar-green" aria-hidden="true">
           MR
         </span>
         <span className="profile-copy">
-          <strong>Maya Reyes</strong>
-          <small>Recruiting lead</small>
+          <strong>{session.displayName}</strong>
+          <small>Workspace Admin</small>
         </span>
-        <button type="button" aria-label="Sign out">
+        <button
+          type="button"
+          aria-label={loggingOut ? 'Signing out…' : 'Sign out'}
+          disabled={loggingOut}
+          onClick={() => void onLogout()}
+        >
           <LogOut aria-hidden="true" size={17} />
         </button>
       </div>
@@ -221,131 +191,143 @@ function Sidebar() {
   );
 }
 
-function JobRow({ job }: { readonly job: Job }) {
-  return (
-    <article className="job-row">
-      <div className="job-identity">
-        <h3>{job.title}</h3>
-        <p>
-          <span>{job.id}</span>
-          <i aria-hidden="true">·</i>
-          {job.location}
-        </p>
-      </div>
-      <div className="job-owner">
-        <span className={`avatar avatar-${job.ownerTone}`} aria-hidden="true">
-          {job.ownerInitials}
-        </span>
-        <span>{job.owner}</span>
-      </div>
-      <div className="pipeline-summary">
-        <span className="pipeline-bar" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-          <i />
-        </span>
-        <small>{job.inProcess} in process</small>
-      </div>
-      <div className="active-count">
-        <strong>{job.activeCandidates}</strong> active
-      </div>
-      <span className={`status status-${job.status.toLowerCase().replace(' ', '-')}`}>
-        {job.status}
-      </span>
-    </article>
-  );
-}
+function ProtectedWorkspace({
+  candidateGateway,
+  importGateway,
+  jobGateway,
+  loggingOut,
+  onLogout,
+  session,
+}: {
+  readonly candidateGateway?: CandidateGateway;
+  readonly importGateway: ImportGateway;
+  readonly jobGateway: JobGateway;
+  readonly loggingOut: boolean;
+  readonly onLogout: () => Promise<void>;
+  readonly session: AuthenticatedSession;
+}) {
+  const [currentPath] = useLocation();
+  const route = priorityRoutes.find((candidate) => candidate.path === currentPath);
 
-function JobsWorkspace() {
-  return (
-    <main className="workspace" id="jobs">
-      <div className="workspace-heading">
-        <div>
-          <h1>Jobs</h1>
-          <span>6 open</span>
-        </div>
-        <div className="workspace-actions">
-          <button className="filter-button" type="button">
-            Status: All
-            <ChevronDown aria-hidden="true" size={16} />
-          </button>
-          <button className="primary-button" type="button">
-            <Plus aria-hidden="true" size={17} />
-            New job
-          </button>
-        </div>
-      </div>
-
-      <div className="job-groups">
-        {jobGroups.map((group) => (
-          <section
-            className="job-group"
-            key={group.department}
-            aria-labelledby={`group-${group.department}`}
-          >
-            <h2 id={`group-${group.department}`}>
-              {group.department} <span>· {group.jobs.length} open</span>
-            </h2>
-            <div className="job-list">
-              {group.jobs.map((job) => (
-                <JobRow job={job} key={job.id} />
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-    </main>
-  );
-}
-
-export default function App() {
-  const searchRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const focusSearch = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        searchRef.current?.focus();
-      }
-    };
-
-    window.addEventListener('keydown', focusSearch);
-    return () => window.removeEventListener('keydown', focusSearch);
-  }, []);
+  if (!route) {
+    return (
+      <main className="workspace">
+        <h1>Page not found</h1>
+        <Link href="/candidates">Return to Candidates</Link>
+      </main>
+    );
+  }
 
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar
+        currentPath={currentPath}
+        loggingOut={loggingOut}
+        onLogout={onLogout}
+        session={session}
+      />
       <div className="app-content">
         <header className="topbar">
-          <strong>Jobs</strong>
-          <div className="topbar-actions">
-            <label className="global-search">
-              <Search aria-hidden="true" size={17} />
-              <span className="sr-only">Search candidates and jobs</span>
-              <input
-                ref={searchRef}
-                type="search"
-                aria-label="Search candidates and jobs"
-                placeholder="Search candidates, jobs"
-              />
-            </label>
-            <button
-              className="notification-button"
-              type="button"
-              aria-label="Notifications, one unread"
-            >
-              <Bell aria-hidden="true" size={18} />
-              <span aria-hidden="true" />
-            </button>
-            <button className="account-button" type="button" aria-label="Open account menu">
-              <UserRound aria-hidden="true" size={18} />
-            </button>
-          </div>
+          <h1>{route.pageTitle}</h1>
+          <Link className="topbar-search-link" href="/search">
+            <Search aria-hidden="true" size={17} />
+            Search candidates
+          </Link>
         </header>
-        <JobsWorkspace />
+        <main className="workspace priority-workspace">
+          {route.path === '/candidates' && candidateGateway ? (
+            <CandidateWorkspace candidateGateway={candidateGateway} role={session.role} />
+          ) : route.path === '/imports' ? (
+            <ImportWizard importGateway={importGateway} jobGateway={jobGateway} />
+          ) : (
+            <section className="priority-placeholder" aria-label={`${route.pageTitle} foundation`}>
+              <p>{route.description}</p>
+            </section>
+          )}
+        </main>
       </div>
     </div>
+  );
+}
+
+export default function App({
+  authGateway = unconfiguredAuthGateway,
+  candidateGateway,
+  importGateway = unconfiguredImportGateway,
+  jobGateway = unconfiguredJobGateway,
+}: AppProps) {
+  const [currentPath, navigate] = useLocation();
+  const requestedRoute = useRef(requestedLocation(currentPath));
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [session, setSession] = useState<AuthenticatedSession | null | undefined>(undefined);
+  const [sessionMessage, setSessionMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    void authGateway
+      .restoreSession()
+      .then((restoredSession) => {
+        if (!active) {
+          return;
+        }
+
+        if (!restoredSession && window.location.pathname !== '/sign-in') {
+          navigate('/sign-in', { replace: true });
+        }
+        setSession(restoredSession);
+      })
+      .catch((error: unknown) => {
+        if (!active) {
+          return;
+        }
+
+        if (isAuthProblem(error) && error.code === 'SESSION_EXPIRED') {
+          setSessionMessage('Your session expired. Sign in again to continue.');
+        }
+        navigate('/sign-in', { replace: true });
+        setSession(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [authGateway, navigate]);
+
+  if (session === undefined) {
+    return <main aria-label="Restoring session">Loading your workspace…</main>;
+  }
+
+  if (!session) {
+    return (
+      <SignInPage
+        statusMessage={sessionMessage}
+        onLogin={async (credentials) => {
+          const authenticatedSession = await authGateway.login(credentials);
+          setSession(authenticatedSession);
+          navigate(requestedRoute.current, { replace: true });
+        }}
+      />
+    );
+  }
+
+  return (
+    <ProtectedWorkspace
+      candidateGateway={candidateGateway}
+      importGateway={importGateway}
+      jobGateway={jobGateway}
+      loggingOut={loggingOut}
+      onLogout={async () => {
+        setLoggingOut(true);
+        try {
+          await authGateway.logout();
+          setSession(null);
+          navigate('/sign-in', { replace: true });
+        } finally {
+          setLoggingOut(false);
+        }
+      }}
+      session={session}
+    />
   );
 }
