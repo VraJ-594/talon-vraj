@@ -9,6 +9,7 @@ import java.sql.Timestamp;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionOperations;
@@ -42,6 +43,31 @@ public final class JdbcJobRepository implements JobRepository {
                   workspaceId);
             });
     return result == null ? List.of() : List.copyOf(result);
+  }
+
+  @Override
+  public Optional<Job> findImportTarget(UUID workspaceId, UUID jobId) {
+    Objects.requireNonNull(workspaceId, "workspaceId is required");
+    Objects.requireNonNull(jobId, "jobId is required");
+    Optional<Job> result =
+        transactions.execute(
+            status -> {
+              setTenantContext(workspaceId);
+              return jdbc
+                  .query(
+                      """
+                      SELECT id, workspace_id, title, department_name, location, status,
+                             version, created_at, updated_at
+                      FROM job
+                      WHERE workspace_id = ? AND id = ?
+                      """,
+                      JdbcJobRepository::mapJob,
+                      workspaceId,
+                      jobId)
+                  .stream()
+                  .findFirst();
+            });
+    return result == null ? Optional.empty() : result;
   }
 
   @Override

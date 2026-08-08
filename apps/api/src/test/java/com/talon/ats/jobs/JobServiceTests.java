@@ -13,6 +13,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -96,6 +97,11 @@ class JobServiceTests {
     public List<Job> findImportTargets(UUID workspaceId) {
       requestedWorkspaceId = workspaceId;
       return jobs;
+    }
+
+    @Override
+    public Optional<Job> findImportTarget(UUID workspaceId, UUID jobId) {
+      return jobs.stream().filter(job -> job.id().equals(jobId)).findFirst();
     }
 
     @Override

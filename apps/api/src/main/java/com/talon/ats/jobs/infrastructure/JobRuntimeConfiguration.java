@@ -2,6 +2,8 @@ package com.talon.ats.jobs.infrastructure;
 
 import com.talon.ats.jobs.application.JobRepository;
 import com.talon.ats.jobs.application.JobService;
+import com.talon.ats.jobs.contract.ImportTargetAccess;
+import com.talon.ats.jobs.domain.JobStatus;
 import com.talon.ats.jobs.infrastructure.persistence.JdbcJobRepository;
 import java.time.Clock;
 import java.util.UUID;
@@ -17,8 +19,18 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class JobRuntimeConfiguration {
 
   @Bean
-  JobRepository jobRepository(JdbcTemplate jdbc, PlatformTransactionManager transactionManager) {
+  JdbcJobRepository jobRepository(
+      JdbcTemplate jdbc, PlatformTransactionManager transactionManager) {
     return new JdbcJobRepository(jdbc, new TransactionTemplate(transactionManager));
+  }
+
+  @Bean
+  ImportTargetAccess importTargetAccess(JdbcJobRepository repository) {
+    return (workspaceId, jobId) ->
+        repository
+            .findImportTarget(workspaceId, jobId)
+            .filter(job -> job.status() == JobStatus.ACTIVE || job.status() == JobStatus.ON_HOLD)
+            .isPresent();
   }
 
   @Bean
