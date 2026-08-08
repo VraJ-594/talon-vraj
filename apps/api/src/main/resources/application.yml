@@ -43,3 +43,8 @@ info:
   application:
     name: Talon ATS API
     version: "@project.version@"
+
+talon:
+  files:
+    provider: ${TALON_FILES_PROVIDER:local}
+    local-root: ${TALON_FILES_LOCAL_ROOT:${java.io.tmpdir}/talon-private-files}

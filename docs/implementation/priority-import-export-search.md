@@ -4,13 +4,14 @@
 
 Status: in progress.
 
-Current checkpoint (2026-08-08): strict Talon template recognition, private-object cleanup,
-Flyway V4 durable import drafts/preview rows, and the tenant-scoped JDBC persistence adapter are
-implemented. Flyway V4 was applied to the configured Supabase PostgreSQL 17.6 project; the schema
-smoke passed and two synthetic-data persistence integration tests passed with cleanup. The normal
-network-free Maven gate passes 75 tests and the Modulith boundary check. Import HTTP endpoints,
-frontend HTTP gateways, confirmation, candidate/application creation, Drive resume ingestion, and
-private S3 remain incomplete, so the bulk-import workflow is not yet ready for manual testing.
+Current checkpoint (2026-08-08): the backend draft-to-preview slice is implemented through its
+authenticated HTTP boundary. Strict Talon template recognition, private CSV storage, Flyway V4
+draft/preview persistence, tenant-scoped JDBC access, multipart upload, validation, preview
+restoration, and safe problem responses are present. Flyway V4 was applied to the configured
+Supabase PostgreSQL 17.6 project; schema smoke and synthetic persistence checks passed with cleanup.
+The network-free Maven gate passes 93 tests and the Modulith boundary check. Frontend HTTP gateways,
+confirmation, candidate/application processing, Drive resume ingestion, and private S3 remain
+incomplete, so the workflow is not yet ready for end-user manual testing.
 
 The approved active slice is minimal application-owned authentication followed by candidate CSV
 import/private export and dual-mode candidate search. The application-owned login/session HTTP
@@ -42,6 +43,13 @@ the latest run.
   replacement locks the draft and replaces normalized valid rows plus safe issue rows atomically.
 - Exposed the files module's application-owned provider contracts as the named Modulith interface
   `files::contracts`; imports do not depend on the local adapter, S3 SDK, or Supabase-specific API.
+- Added `ImportDraftService` orchestration for ADMIN/RECRUITER authorization, active-job checks,
+  bounded uploads, private-object/database compensation, exact mapping validation, and repeatable
+  preview reads.
+- Added authenticated `/api/v1/imports` template, multipart upload, validate, and preview endpoints
+  with stable problem responses and no private object keys in browser-visible payloads.
+- Added fail-closed runtime provider selection. The files module owns local-adapter construction
+  through `ObjectStorageFactory`, keeping imports dependent only on its exposed contract.
 - Recorded the owner naming convention in `docs/architecture/aws-terraform-design.md`: explicitly
   nameable AWS resources end in `-vraj`, global uniqueness precedes that suffix, and supported
   resources receive `Owner=Vraj` plus `Project=TalonATS` tags.
@@ -328,6 +336,17 @@ from becoming database instructions.
   application contract. Adding `files::contracts` made `ModuleArchitectureTests` pass.
 - Current network-free full verification: `mvn ... spotless:apply verify` — build succeeded; 75
   tests passed, the executable JAR was produced, and Spotless reported all 130 Java files clean.
+- Durable import application workflow committed as `f27a935`: authorized ADMIN/RECRUITER uploads
+  now require an importable job, store the original CSV behind the private `ObjectStorage` port,
+  compensate storage when draft persistence fails, and restore repeatable validation previews.
+- The authenticated HTTP/runtime checkpoint adds template download, multipart draft creation,
+  strict validation, preview restoration, stable RFC 9457 problems, and fail-closed storage-provider
+  selection. A files-module factory contract creates local private storage without exposing its
+  infrastructure adapter to the imports module.
+- Focused import/auth/jobs/runtime/architecture verification passed 17/17.
+- Current network-free full verification after the import HTTP checkpoint:
+  `mvn ... spotless:apply verify` — build succeeded; 93 tests passed, the executable JAR was
+  produced, and Spotless reported all 142 Java files clean.
 
 ## Blockers, prerequisites, and exact next step
 
@@ -341,9 +360,9 @@ from becoming database instructions.
 - AWS account, private S3/SQS resources, malware scanner runtime, a funded xAI key, and one synthetic
   anonymously downloadable Drive PDF for a live provider smoke remain external prerequisites for
   their later checkpoints.
-- Exact next step: implement `ImportDraftService` test-first, including
-  active-job authorization, strict upload ordering, private-object/database compensation, exact
-  mapping validation, and repeatable preview restoration. Then expose `/api/v1/imports` and connect
-  the frontend HTTP gateways. Only after confirmation/worker processing exists should rows create
+- Exact next step: connect the frontend's shared authenticated `ApiClient`, jobs gateway, template
+  download, CSV upload, read-only detected mapping, validation preview, and preview restoration to
+  the new HTTP endpoints. The preview UI must stop before its fixture-only confirmation/processing
+  path. Only after the next confirmation/worker checkpoint exists should rows create
   candidate/application records and public Drive PDFs stream through rate limiting/quarantine into
   the private S3 adapter.
