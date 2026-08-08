@@ -11,7 +11,7 @@ locals {
   github_actions_policy_name = "talon-${var.environment}-terraform-permissions-vraj"
   state_key                  = "talon/${var.environment}/terraform.tfstate"
   runtime_state_key          = "talon/${var.environment}/runtime/terraform.tfstate"
-  github_subject             = "repo:${var.github_owner}/${var.github_repository}:ref:refs/heads/${var.github_branch}"
+  github_subject             = "repo:${var.github_owner}@${var.github_owner_id}/${var.github_repository}@${var.github_repository_id}:ref:refs/heads/${var.github_branch}"
   github_oidc_provider_arn = coalesce(
     var.existing_github_oidc_provider_arn,
     one(aws_iam_openid_connect_provider.github[*].arn)

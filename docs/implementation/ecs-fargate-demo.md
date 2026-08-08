@@ -108,3 +108,6 @@ autoscaling, WAF, and production high availability.
   `development` GitHub Environment, changing the token subject away from the role's exact main-ref
   trust. Repository variables are already used, so the environment declaration was removed. The
   next run will retain the strict `refs/heads/main` trust without storing AWS credentials.
+- CloudTrail then exposed the repository's customized ID-bound subject as
+  `repo:VraJ-594@149707336/talon-vraj@1327513749:ref:refs/heads/main`. Bootstrap Terraform now models
+  the immutable owner and repository IDs explicitly and retains the exact main-ref restriction.

@@ -25,10 +25,32 @@ variable "github_owner" {
   default     = "VraJ-594"
 }
 
+variable "github_owner_id" {
+  description = "Immutable GitHub owner ID included by the repository OIDC subject template."
+  type        = string
+  default     = "149707336"
+
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_owner_id))
+    error_message = "github_owner_id must contain only digits."
+  }
+}
+
 variable "github_repository" {
   description = "GitHub repository allowed to assume the Terraform role."
   type        = string
   default     = "talon-vraj"
+}
+
+variable "github_repository_id" {
+  description = "Immutable GitHub repository ID included by the repository OIDC subject template."
+  type        = string
+  default     = "1327513749"
+
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_repository_id))
+    error_message = "github_repository_id must contain only digits."
+  }
 }
 
 variable "github_branch" {
