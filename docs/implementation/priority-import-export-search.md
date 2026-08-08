@@ -4,6 +4,14 @@
 
 Status: in progress.
 
+Current checkpoint (2026-08-08): strict Talon template recognition, private-object cleanup,
+Flyway V4 durable import drafts/preview rows, and the tenant-scoped JDBC persistence adapter are
+implemented. Flyway V4 was applied to the configured Supabase PostgreSQL 17.6 project; the schema
+smoke passed and two synthetic-data persistence integration tests passed with cleanup. The normal
+network-free Maven gate passes 75 tests and the Modulith boundary check. Import HTTP endpoints,
+frontend HTTP gateways, confirmation, candidate/application creation, Drive resume ingestion, and
+private S3 remain incomplete, so the bulk-import workflow is not yet ready for manual testing.
+
 The approved active slice is minimal application-owned authentication followed by candidate CSV
 import/private export and dual-mode candidate search. The application-owned login/session HTTP
 contract, PostgreSQL schema, Supabase-hosted Flyway deployment, tenant-safe JDBC persistence,
@@ -18,6 +26,25 @@ paths are present but are not marked verified because the session pooler became 
 the latest run.
 
 ## What changed
+
+- Added a strict, case-insensitive Talon template policy for the 18 canonical CSV columns. Unknown,
+  missing-required, and case-insensitive duplicate source columns fail with stable codes before a
+  draft can be persisted; the generated template contains one synthetic row.
+- Preserved source-column order in the read-only recognition ledger and `ColumnMapping` rather than
+  relying on `Map.copyOf` iteration order.
+- Added idempotent `ObjectStorage.delete(PrivateObjectKey)` and local root-confined deletion so an
+  upload workflow can compensate if database creation fails after a private object write.
+- Added forward Flyway V4 with tenant-owned `candidate_import` and `candidate_import_row` tables,
+  creator membership/job foreign keys, bounded counts/JSON shapes, forced RLS, indexes, and
+  `talon_app` grants.
+- Added `ImportDraftRepository` and `JdbcImportDraftRepository`. Every operation uses a Spring
+  transaction, transaction-local workspace context, and `SET LOCAL ROLE talon_app`; preview
+  replacement locks the draft and replaces normalized valid rows plus safe issue rows atomically.
+- Exposed the files module's application-owned provider contracts as the named Modulith interface
+  `files::contracts`; imports do not depend on the local adapter, S3 SDK, or Supabase-specific API.
+- Recorded the owner naming convention in `docs/architecture/aws-terraform-design.md`: explicitly
+  nameable AWS resources end in `-vraj`, global uniqueness precedes that suffix, and supported
+  resources receive `Owner=Vraj` plus `Project=TalonATS` tags.
 
 - Replaced the broad active roadmap with gated foundation, import/export, search, AWS, and E2E
   phases.
@@ -287,17 +314,36 @@ from becoming database instructions.
 - Current network-free full verification after the Task 4 processing-policy checkpoint:
   `mvn ... spotless:apply verify` — build succeeded; 68 tests passed, the executable JAR was
   produced, and Spotless reported all 122 Java files clean.
+- Strict-template RED failed at test compilation because `StrictTalonImportTemplate` was absent;
+  the final focused template/parser/mapping gate passed 19/19 and committed as `f031a54`.
+- Object-deletion RED failed on the missing port method; the final storage/Drive/file-processing
+  gate passed 18/18 and committed as `2422e2f`.
+- Supabase schema RED observed Flyway version 3 and missing `candidate_import`; forward V4 then
+  applied successfully and `SupabaseSchemaSmokeIT` passed against PostgreSQL 17.6.
+- JDBC persistence RED failed at compilation because the draft/preview port and adapter were
+  absent. `SupabaseImportDraftPersistenceIT` then passed 2/2 with random synthetic tenant data,
+  proving draft readback, RLS scoping, JSONB mapping, atomic preview replacement, replay, and
+  cleanup.
+- The first full gate correctly failed because imports referenced the files module's unexposed
+  application contract. Adding `files::contracts` made `ModuleArchitectureTests` pass.
+- Current network-free full verification: `mvn ... spotless:apply verify` — build succeeded; 75
+  tests passed, the executable JAR was produced, and Spotless reported all 130 Java files clean.
 
 ## Blockers, prerequisites, and exact next step
 
-- The last verified Supabase state is Flyway version 2. The latest pooler connection is currently
-  unreachable from this shell, so V3 and the new job/candidate persistence integration tests remain
-  pending. Local database, JWT, refresh-HMAC, and demo-login values remain in ignored files and were
-  never committed.
-- AWS account, private S3/SQS resources, malware scanner choice, a funded xAI key, and one synthetic
-  anonymously downloadable Drive PDF for a live provider smoke remain future external prerequisites.
-- Exact next step: implement contract-tested ClamAV-compatible scanning and bounded PDFBox text
-  extraction (50 pages, 500,000 characters, ten seconds, two concurrent), then add five-minute
-  download grants. After that, implement the S3 adapter and Terraform public-access assertions
-  behind the completed `ObjectStorage` port. When the pooler is reachable, run the saved
-  database-only `supabase-smoke` command to apply V3 and close the persistence gate.
+- Docker Testcontainers cannot currently run: only `E:\Docker\Data` is present, no Docker Desktop
+  launcher or `docker.exe` is discoverable, and both Docker named pipes are absent. The retained
+  `PrioritySchemaMigrationIT` V4/RLS test compiles but requires Docker Desktop to be started from its
+  actual installation. Real Supabase schema/persistence gates are green and Flyway is at V4.
+- The temporary branch split was corrected with a safe fast-forward: `codex/backend-api` now
+  contains persistence commit `7498989` and is the active checkout. The appmod branch was preserved
+  at the same commit; no branch or work was reset/deleted.
+- AWS account, private S3/SQS resources, malware scanner runtime, a funded xAI key, and one synthetic
+  anonymously downloadable Drive PDF for a live provider smoke remain external prerequisites for
+  their later checkpoints.
+- Exact next step: implement `ImportDraftService` test-first, including
+  active-job authorization, strict upload ordering, private-object/database compensation, exact
+  mapping validation, and repeatable preview restoration. Then expose `/api/v1/imports` and connect
+  the frontend HTTP gateways. Only after confirmation/worker processing exists should rows create
+  candidate/application records and public Drive PDFs stream through rate limiting/quarantine into
+  the private S3 adapter.

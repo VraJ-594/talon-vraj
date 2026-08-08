@@ -22,6 +22,20 @@ Supabase secret reference/value injection procedure, bucket naming prefix, queue
 configuration, and alarms. No account ID, ARN, region, bucket name, credential, or Terraform state
 is committed/hardcoded in application behavior.
 
+### Resource naming and ownership
+
+Terraform applies the owner suffix `-vraj` to every explicitly nameable AWS resource. Globally
+unique and region/account-scoped identifiers place their uniqueness components before the final
+suffix; for example, `talon-resumes-<account>-<region>-vraj`. ECS services, ECR repositories,
+queues, log groups, IAM roles, security groups, load balancers, and any future EC2 instance `Name`
+tag follow the same final-suffix rule within each service's naming constraints.
+
+All supported resources also receive the default tags `Owner = "Vraj"` and
+`Project = "TalonATS"`, plus environment and managed-by tags. AWS-generated ephemeral identifiers
+such as ECS task IDs cannot be renamed; their parent service/task definition and propagated tags
+carry the ownership convention instead. The naming suffix and tags affect Terraform configuration
+only and never application behavior.
+
 ## 3. Topology
 
 - CloudFront serves the SPA from a private S3 origin through Origin Access Control.
